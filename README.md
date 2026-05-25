@@ -79,6 +79,8 @@ docker run -d \
 
 This repo sets `ignore-scripts=true` in `.npmrc` to block postinstall execution during `npm ci`. Most packages work fine, but some native dependencies (e.g. `sharp`, `better-sqlite3`, `bcrypt`) require a build step that runs via install scripts. If you add such a package and get confusing runtime errors, run `npm rebuild` after install to trigger the build manually.
 
+One known consequence: Prisma's postinstall (which generates the typed client into `node_modules/@prisma/client`) does not run automatically. Use `npm run db:generate` to generate it. `npm run db:migrate` and `npm run verify` both invoke it for you, so the typical workflow is unaffected.
+
 ## Project Structure
 
 ```

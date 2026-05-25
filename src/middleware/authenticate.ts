@@ -12,10 +12,6 @@ import type { Request, Response, NextFunction } from "express";
 // Hint: Use the `jsonwebtoken` package (already in dependencies).
 // ---------------------------------------------------------------------------
 
-export function authenticate(
-  _req: Request,
-  res: Response,
-  _next: NextFunction,
-): void {
+export function authenticate(_req: Request, res: Response, _next: NextFunction): void {
   res.status(501).json({ error: { message: "Authentication not implemented" } });
 }
