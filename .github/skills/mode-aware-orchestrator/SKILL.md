@@ -21,6 +21,7 @@ Choose a sub-agent's reasoning mode from the task's uncertainty, branching, and 
 4. Give fast agents bounded, pattern-based tasks. Give thinking agents a specific decision or risk to resolve; do not use higher effort to compensate for missing requirements.
 5. Review sub-agent outputs against the task's success criteria. Escalate from fast to extended thinking only when unresolved cross-cutting risks, ambiguous evidence, or failed validation justify the additional cost and latency.
 6. For an interleaved run, require the agent to state its current hypothesis after material tool results, revise its plan when evidence contradicts it, and stop at the configured hop or cost limit.
+7. Use `context-budgeting` before constructing prompts or expanding context so the selected files, snippets, and token budget match the task.
 
 ## Report the mode decision
 
