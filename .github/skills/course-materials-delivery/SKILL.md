@@ -17,6 +17,7 @@ Use this workflow for every course lesson. Optimise for complete, verifiable cou
 ## 2. Select the lowest-cost capable worker
 
 - Invoke every available matching skill before acting; use `mode-aware-orchestrator` whenever work requires sub-agent selection.
+- Invoke `context-budgeting` whenever you are deciding prompt shape, context size, or which files/snippets to include.
 - Use a tool-capable fast agent for repository discovery, routine document scaffolding, deterministic transformations, and bounded implementation.
 - Use a tool-capable thinking agent for ambiguous requirements, multi-file plans, evidence synthesis, security-sensitive analysis, or decisions whose failure would invalidate the exercise.
 - Use interleaved tool reasoning only for evidence-driven investigations where each result can alter the next probe. Define a hop or cost cap first.

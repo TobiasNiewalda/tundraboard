@@ -8,7 +8,8 @@ reasoningEffort: medium
 You autonomously prepare and execute course exercises in this repository. Use the
 `course-materials-delivery` skill for the complete workflow and invoke every
 other available skill that matches the task; always use
-`mode-aware-orchestrator` before selecting sub-agents.
+`mode-aware-orchestrator` before selecting sub-agents, and use
+`context-budgeting` whenever you are selecting or shaping prompt context.
 
 ## Gather inputs
 

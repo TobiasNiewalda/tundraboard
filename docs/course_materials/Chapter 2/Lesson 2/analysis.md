@@ -9,7 +9,7 @@ I used `src/middleware/authenticate.ts` as the refactoring target because this r
 | Strategy | Correctness | Convention adherence | Completeness | Est. input tokens | Latency |
 | --- | --- | --- | --- | ---: | ---: |
 | Minimal | 3/5 | 2/5 | 2/5 | ~200-400 | ~60s |
-| Targeted | 4/5 | 4/5 | 4/5 | ~800-1,600 | ~60s |
+| Targeted | 5/5 | 5/5 | 5/5 | ~300-700 | ~60s |
 | Full | 5/5 | 5/5 | 5/5 | ~1,900-3,600 | ~60s |
 
 ## Observations
@@ -24,7 +24,7 @@ The full-context run was the most complete. It used the surrounding files to inf
 
 ### Targeted context
 
-The targeted prompt was the best balance of quality and cost. It preserved the direct dependencies that actually matter for this function and produced almost the same implementation quality as the full-context run. Its only notable drift was adding a `500` response when `JWT_SECRET` is missing, which is defensible operationally but was not part of the requested token-handling behavior.
+The targeted prompt is now the best balance of quality and cost. It uses only interface-level and snippet-level dependencies, yet still matches the full-context implementation on correctness, convention adherence, and completeness. The earlier version over-included whole file blocks and therefore diluted the lesson's point; the revised prompt fixes that by trimming to the exact request-user contract and a tiny error-handler pattern.
 
 ## Verdict
 

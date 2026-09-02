@@ -8,13 +8,15 @@ Start with the smallest context that still explains the target and its direct de
 
 Use full files when the AI is editing the whole file, when the file is short, or when the change depends on several nearby branches of logic that are hard to summarize safely. Full-file context is also appropriate for migration work, security-sensitive changes, or refactors where the file's conventions are the main source of truth.
 
+Do not use full-file context for unrelated route stubs or helper bodies when a contract, type declaration, or short pattern is enough.
+
 ## When to use targeted context
 
 Use a targeted snippet when you are changing one function or one block and can name the dependencies precisely. Include:
 
 1. The target function or block.
 2. The types and signatures it calls.
-3. One example of the style or pattern to follow.
+3. One small example of the style or pattern to follow.
 4. A short instruction block that states the output shape and constraints.
 
 If a dependency does not change the answer, do not include it.
@@ -29,6 +31,8 @@ Ask four questions:
 4. What project convention would make a wrong answer obvious?
 
 If the answer is “none” to all four, the code is probably local enough for a minimal prompt. If the answer is “yes” to any of them, add only the specific snippet that resolves that dependency.
+
+When possible, prefer an exact interface declaration or a 2-3 line pattern over a whole file block.
 
 ## Token budget guidelines
 
