@@ -16,7 +16,7 @@ taskRouter.get("/:id", async (req, res) => {
   try {
     const task = await getTask(req.params.id);
     res.json(task);
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.message === "Task not found") {
       res.status(404).json({ error: "not found" });
       return;
@@ -42,7 +42,7 @@ taskRouter.post("/:taskId/comments", async (req, res) => {
     });
 
     res.status(201).json(comment);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "failed to create comment" });
   }
 });
@@ -51,7 +51,7 @@ taskRouter.get("/:taskId/comments", async (req, res) => {
   try {
     const comments = await getCommentsByTaskId(req.params.taskId);
     res.json(comments);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "failed to get comments" });
   }
 });

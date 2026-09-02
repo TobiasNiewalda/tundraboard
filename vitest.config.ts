@@ -9,6 +9,11 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.ts"],
       exclude: ["src/index.ts", "src/types/**"],
+      thresholds: {
+        lines: 80,
+        branches: 45,
+        functions: 80,
+      },
     },
   },
 });
