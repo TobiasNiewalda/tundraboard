@@ -11,7 +11,7 @@ Use this workflow for every course lesson. Optimise for complete, verifiable cou
 
 1. Locate and read the lesson content and exercise in full. If chapter, lesson, or either input is unavailable, ask the user for the missing item before acting.
 2. Convert each explicit requirement into a checklist: required artifacts, experiments, output fields, validations, branch/publish requirements, and exclusions.
-3. Inspect prior course-material outputs for file names, formatting, and evidence standards. Reuse the established shape unless the current exercise requires another.
+3. Inspect the exercise's submission section before prior course-material outputs. Explicit submission paths, including repository-root artifacts, always override an established documentation layout.
 4. Before creating files, state the intended artifact paths and the evidence each will contain.
 
 ## 2. Select the lowest-cost capable worker
@@ -39,7 +39,7 @@ Suggest a new skill, agent, or MCP server only when a repeated, concrete frictio
 
 ## 5. Validate and publish safely
 
-1. Audit the final artifact checklist and run the smallest relevant validation.
+1. Audit the final artifact checklist, including every explicit submission path, and run the smallest relevant validation.
 2. Create a descriptive branch on the user's fork. Stage only files created or changed for the exercise; do not absorb unrelated worktree changes.
 3. Commit with the required trailer and push to `origin`. Do not merge or open a pull request unless requested.
 4. Report the branch, commit SHA, completed artifacts, validation result, and any concrete automation recommendation.
