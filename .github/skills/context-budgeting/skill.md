@@ -13,6 +13,8 @@ Start with the target, then add only direct dependencies, one convention example
 
 For snippet-level prompting, prefer exact interfaces, type signatures, and 2-3 line patterns over whole file blocks. If an example body is not necessary to answer the task, omit it.
 
+Make the evaluation step explicit in the prompt: state the expected edge-case behavior and status codes directly, such as `res.status(500)` when a required secret is missing.
+
 ## Prompt selection
 
 - **Full file** when the AI is editing or judging the whole file.
@@ -42,5 +44,6 @@ If a snippet answers those questions, stop there.
 - Prefer snippets over whole files when the pattern is stable.
 - Trim targeted prompts to the smallest interface or snippet that resolves the dependency; avoid carrying unused route stubs or implementation bodies.
 - Include one example of the style you want followed.
+- Spell out edge-case status codes and error shapes in the constraints instead of assuming the model will infer them from snippets.
 - Keep prompts and comparisons identical across mode tests.
 - Record what context was added and why, so later runs can reuse the same budget.

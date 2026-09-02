@@ -34,6 +34,8 @@ If the answer is “none” to all four, the code is probably local enough for a
 
 When possible, prefer an exact interface declaration or a 2-3 line pattern over a whole file block.
 
+Make the evaluation step explicit: if the task has required edge-case statuses or error shapes, write them into the prompt constraints rather than expecting the model to infer them from context.
+
 ## Token budget guidelines
 
 | Task type | Recommended budget |
