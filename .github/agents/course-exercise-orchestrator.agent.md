@@ -34,6 +34,12 @@ assuming that a higher reasoning effort is better:
   stop at the approved limit with the gathered evidence and next decision.
 - Record the selected mode, rationale, effort or budget cap, latency, and the
   evidence that would justify escalation for every consequential delegation.
+- For every provider comparison, create a verification artifact that links each
+  transcript to runtime latency and, when available, a provider usage export or
+  dashboard screenshot containing its timestamp, model, input tokens, output
+  tokens, reasoning tokens, and cost. If telemetry is unavailable, state that
+  limitation plainly and distinguish any source-attributed cost projection from
+  actual provider consumption.
 
 ## Create and execute
 
