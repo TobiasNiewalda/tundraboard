@@ -19,6 +19,7 @@ Lesson 1 focuses on verification as a first-class part of AI-assisted developmen
 - `test` depends on `type-check` and runs with coverage enabled.
 - `npm run db:generate` runs before the type-check and test jobs so Prisma client generation is available on a clean runner.
 - `vitest.config.ts` enforces an 80% threshold for lines and functions, with a 45% branch threshold to match the repository's current coverage baseline.
+- The audit gate uses a time-bound allowlist for the known Prisma advisory chain, matched by package name, range, and dependency path, so CI stays blocking for new findings while the existing issue is tolerated temporarily.
 
 ## Validation
 
