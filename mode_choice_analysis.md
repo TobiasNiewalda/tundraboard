@@ -1,0 +1,30 @@
+# Mode Choice Analysis
+
+## Selected tasks
+
+1. **Routine generation:** Add a `POST /workspaces/:workspaceId/labels` endpoint following the established TundraBoard API conventions.
+2. **Planning / multi-file refactor:** Introduce `deleted_at` soft deletion across Task, Project, and Label without breaking existing queries.
+
+## Comparison write-up
+
+### Task 1: `POST /workspaces/:workspaceId/labels`
+
+GPT Mini fast was the stronger response. It used the existing `Label` model's `colour` spelling and concrete 50-character limit, suggested mapping the unique constraint to `409`, and acknowledged the current authentication and workspace routes are stubs. It nevertheless made an unverified claim about a likely `authenticate.ts` implementation, so that detail would need checking before coding. The thinking response was less grounded: it explicitly could not verify file names, used American `color`, and treated the known model and constraints as conditional. Fast was also slower in this sample (20s versus 10s), which shows that mode does not guarantee latency on an individual run.
+
+**Quality verdict:** fast 4/5; thinking 2/5.
+
+### Task 2: Soft-delete rollout
+
+Both Sonnet plans correctly noticed that the application is still a scaffold, so the main risk is setting conventions for future code rather than migrating live route queries. The fast plan went broader, including `TaskLabel` handling and a staged rollout. The thinking plan made the more important distinction that a project soft-delete should update non-deleted child tasks in the same transaction while comments, attachments, and join rows need not acquire `deleted_at`; it also correctly noted that `findUnique` cannot include the active-record filter. Its extra specificity identifies an implementation decision that prevents visible tasks beneath deleted projects.
+
+**Quality verdict:** fast 4/5; thinking 5/5.
+
+## Mode-choice analysis
+
+### Task 1: Routine endpoint generation
+
+Use **fast generation**. The fast transcript produced a concrete, schema-aligned route and test outline, including the actual `colour` field, workspace-scoped uniqueness, and a focused mocked-test strategy for the current scaffold. The thinking transcript failed to use repository evidence it was asked to inspect, framed established facts as unknown, and did not improve the design enough to justify even the lesson's projected 3.2x low-effort or 18.6x high-effort cost multiplier. Although this individual fast run took 20 seconds compared with 10 seconds for thinking, the verification evidence shows latency alone is not a reliable reason to select a mode. Escalate only if the endpoint introduces a new role policy or another cross-workspace invariant not covered by a supplied example.
+
+### Task 2: Soft-delete multi-file refactor
+
+Use **extended thinking**. The high-effort transcript surfaced the ordering boundary that a parent Project and its active child Tasks must be soft-deleted together in one transaction, while also explaining why `findUnique` needs a subsequent `deletedAt` check. The fast transcript identified the relevant models and migration mechanics but did not define that transactional behaviour as precisely. The high-effort run took 44 seconds versus 39 seconds, a five-second overhead; the lesson's projected 18.6x high-effort cost multiplier is justified here because this omission could expose tasks through a deleted project. See `runs/verification_evidence.md` for the runtime measurements and source-attributed cost ratios.
