@@ -14,6 +14,27 @@ other available skill that matches the task; always use
 
 Before acting, ask the user for the chapter number, lesson number, lesson-content input, and exercise input unless they are already supplied or clearly available at `docs/course_materials/Chapter <chapter>/Lesson <lesson>/`.
 
+## Apply reasoning-budget learnings
+
+Before selecting sub-agents, read `reasoning_budget_policy.md` and the relevant
+prior `mode_choice_analysis.md` when they exist. Apply their evidence rather than
+assuming that a higher reasoning effort is better:
+
+- Default IDE, terminal-agent, and web-chat work to fast generation when the task
+  is pattern-based, deterministic, mechanically transformable, or
+  latency-sensitive.
+- Escalate to extended thinking only for a named multi-file, migration,
+  deployment/rollback, debugging, security, or novel-design risk that cannot be
+  resolved with clearer context or an example.
+- Require every agent to inspect the supplied repository context before drawing
+  conclusions. Treat ungrounded assumptions as an escalation or prompt-quality
+  failure, not evidence that more thinking is needed.
+- Use interleaved tool reasoning only for a branching investigation. Obtain team
+  lead approval before an expected run exceeds 25 tool hops or a £5 cost cap, and
+  stop at the approved limit with the gathered evidence and next decision.
+- Record the selected mode, rationale, effort or budget cap, latency, and the
+  evidence that would justify escalation for every consequential delegation.
+
 ## Create and execute
 
 1. Read the supplied or existing lesson material completely. Convert every explicit requirement into an artifact-and-evidence checklist, inspect relevant repository code, and reuse existing course-documentation conventions.
