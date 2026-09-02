@@ -1,36 +1,37 @@
 # Workflow Test and Reflection
 
 ## Tested workflow
-I tested **Workflow: Review a Change for Correctness and Risk** against the TundraBoard auth stubs.
+I tested **Workflow: Analyze Vulnerability Report** using the same TundraBoard vulnerability finding from my previous submission.
 
 ## Target task
-Review `src\middleware\authenticate.ts` and `src\routes\auth.ts` as if they were the change under review.
+Assess whether the `jsonwebtoken` vulnerability applies to the project, then decide whether remediation is needed.
 
-## Evidence from the repo
-- `src\middleware\authenticate.ts` returns `501` and still contains a `TODO` for JWT authentication.
-- `src\routes\auth.ts` defines the router but still contains only a `TODO` for register/login endpoints.
+## Evidence from the prior run
+- `jsonwebtoken` was already at `9.0.3`, which is past the fixed `9.0.0` release.
+- The finding was therefore not applicable to the current dependency version.
+- The report captured the non-impact decision and recommended an explicit algorithm allow-list for future JWT work.
 
 ## Result
-The workflow produced a clean, useful outcome:
-- It quickly identified that the code is not review-ready because the behavior is still stubbed.
-- It surfaced the exact missing behaviors: token extraction/verification in middleware and register/login handling in the auth router.
-- It made the next action obvious: either implement the endpoints first or reframe the task as an implementation workflow rather than a review.
+The workflow worked well because it separated applicability from remediation:
+- First it asked whether the vulnerability actually applied.
+- Then it used repo evidence to confirm the package was already patched.
+- Finally it produced a short, usable conclusion instead of forcing an unnecessary fix.
 
 ## What I would change
-I would add an explicit early step in the review workflow: `Is this file a stub, a partial implementation, or a real patch?` That would avoid wasting review time on unfinished code and route the task to the implementation workflow sooner.
+I would add a dedicated **“output format”** line to each workflow, so the assistant knows whether to return a decision memo, patch, test file, or execution report.
 
 ## Reflection: benefits vs. ad-hoc prompting
 **Benefits**
-- Less re-explaining the same task shape
-- Better coverage of edge cases and review criteria
-- Easier to reuse across similar feature work
-- Clearer handoff between analysis, implementation, and verification
+- More repeatable than free-form prompting
+- Easier to reuse across similar incidents
+- Makes verification explicit instead of implied
+- Helps distinguish analysis from implementation work
 
 **Trade-offs**
-- More setup than a one-off prompt
-- Needs maintenance as conventions change
-- Can be too rigid for genuinely novel work
-- Requires good examples to stay specific
+- Requires more upfront context
+- Needs maintenance when conventions change
+- Can be overkill for one-off tasks
+- Only works well if the prompt examples stay specific
 
 ## Improvement to the four-component structure
-Add a **failure modes / escalation** section. That would capture when the workflow should stop, switch tasks, or ask for more context, which matters for stubbed code, unclear requirements, and security-sensitive changes.
+Add an explicit **failure-mode / escalation** section. That would tell future users when to stop, ask for more context, or switch workflows, which is especially useful for security findings and partially implemented code.
