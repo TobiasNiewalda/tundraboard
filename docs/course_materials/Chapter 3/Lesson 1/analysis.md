@@ -13,6 +13,19 @@ Lesson 1 focuses on verification as a first-class part of AI-assisted developmen
 | `docs/course_materials/Chapter 3/Lesson 1/Content.md`  | Normalised lesson content                                                |
 | `docs/course_materials/Chapter 3/Lesson 1/Exercise.md` | Normalised exercise prompt                                               |
 
+## Changed / relevant files
+
+- `docs/course_materials/Chapter 3/Lesson 1/Content.md`
+- `docs/course_materials/Chapter 3/Lesson 1/Exercise.md`
+- `docs/course_materials/Chapter 3/Lesson 1/analysis.md`
+- `docs/course_materials/Chapter 3/Lesson 1/runs/01-luna-review.md`
+- `.github/workflows/ci.yml`
+- `package.json`
+- `package-lock.json`
+- `scripts/audit-gate.mjs`
+- `vitest.config.ts`
+- `src/routes/tasks.ts`
+
 ## Solution summary
 
 - `type-check`, `lint`, and `security-audit` run independently.
