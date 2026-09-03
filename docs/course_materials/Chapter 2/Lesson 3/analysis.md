@@ -1,6 +1,7 @@
 # Chapter 2 Lesson 3 — Legacy Task Service Modernisation Analysis
 
 Review files:
+
 - `src/services/taskService.ts`
 - `src/routes/tasks.ts`
 - `tests/tasks.test.ts`
@@ -42,6 +43,7 @@ Two exported service methods now have explicit return types:
 ### 1) Role-setting prompt for the migration plan
 
 > You are a senior TypeScript architect modernising the TundraBoard task service. Inspect the current task route and Prisma models, then produce a migration plan that:
+>
 > 1. renames the service file to `src/services/taskService.ts`
 > 2. defines explicit interfaces for `Task`, `TaskComment`, and `TaskLabel`
 > 3. adds Promise-returning return types to at least two service methods
@@ -50,11 +52,13 @@ Two exported service methods now have explicit return types:
 ### 2) Few-shot prompt for the typed service
 
 > Follow the repository's existing TypeScript style:
+>
 > ```ts
 > export async function getHealth(): Promise<{ status: string }> {
 >   return { status: "ok" };
 > }
 > ```
+>
 > Using the same conventions, convert the task service into TypeScript. Define explicit interfaces, export Promise-returning service methods, and keep the `Task not found` error for missing tasks.
 
 ### 3) Chain-of-thought prompt for the route behavior
