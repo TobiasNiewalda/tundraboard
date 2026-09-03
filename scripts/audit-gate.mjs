@@ -66,15 +66,28 @@ const unexpected = names.filter((name) => {
     return true;
   }
 
-  if (entry.severity !== allowed.severity || entry.range !== allowed.range) {
+  if (
+    entry.severity !== allowed.severity ||
+    entry.range !== allowed.range ||
+    !Array.isArray(entry.via) ||
+    entry.via.length !== 1
+  ) {
     return true;
   }
 
   if (name === "deepmerge-ts") {
-    return !entry.via?.some((item) => item?.title === allowed.title);
+    const advisory = entry.via[0];
+    return (
+      typeof advisory !== "object" ||
+      advisory === null ||
+      advisory.title !== allowed.title ||
+      advisory.range !== allowed.range ||
+      advisory.severity !== allowed.severity ||
+      advisory.name !== name
+    );
   }
 
-  return !entry.via?.includes(allowed.via);
+  return entry.via[0] !== allowed.via;
 });
 
 if (unexpected.length > 0) {
