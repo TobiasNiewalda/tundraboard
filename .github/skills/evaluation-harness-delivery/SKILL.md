@@ -33,6 +33,13 @@ Separate two deliverables:
 A public branch, file map, or reviewer URL is not a substitute for inline
 artifacts when the rubric says to paste source or data.
 
+For Skillio.ai source HTML, use `scripts/skillio_html_extract.py` and require
+the user's explicit source element or section selector plus exercise-boundary
+selector; do not infer page structure or scrape the full document. When
+assembling several expected exercise outputs, create an ordered list file and
+use `scripts/combine_exercise_outputs.py` so the combined copy-ready artifact
+is reproducible.
+
 ## 2. Budget context and workers
 
 Use the smallest context that answers the dependency questions:
