@@ -15,6 +15,7 @@
 I can’t verify the repo’s exact file names here, so below is the minimal change set to add `POST /workspaces/:workspaceId/labels` in the existing TundraBoard style.
 
 ### Implementation changes
+
 1. **Route**
    - Add a workspace-scoped POST route in the existing workspace router:
      - `POST /workspaces/:workspaceId/labels`
@@ -49,6 +50,7 @@ I can’t verify the repo’s exact file names here, so below is the minimal cha
      - unique constraint on `(workspaceId, name)` if that is the existing product rule.
 
 ### Focused tests
+
 1. **Success**
    - authenticated workspace member/admin can create a label
    - response includes created label fields and correct `workspaceId`

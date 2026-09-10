@@ -25,7 +25,9 @@ describe("task characterisation", () => {
   it("returns 404 when a task is missing", async () => {
     prismaMock.task.findUnique.mockResolvedValue(null);
 
-    const response = await request(app).get("/tasks/00000000-0000-0000-0000-000000000001");
+    const response = await request(app).get(
+      "/tasks/00000000-0000-0000-0000-000000000001",
+    );
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "not found" });

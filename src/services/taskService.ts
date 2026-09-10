@@ -69,14 +69,18 @@ export async function getTask(taskId: string): Promise<TaskDetails> {
   return toTaskDetails(task);
 }
 
-export async function getCommentsByTaskId(taskId: string): Promise<TaskComment[]> {
+export async function getCommentsByTaskId(
+  taskId: string,
+): Promise<TaskComment[]> {
   return prisma.comment.findMany({
     where: { taskId },
     orderBy: { createdAt: "asc" },
   });
 }
 
-export async function createComment(input: CreateCommentInput): Promise<TaskComment> {
+export async function createComment(
+  input: CreateCommentInput,
+): Promise<TaskComment> {
   return prisma.comment.create({
     data: {
       taskId: input.taskId,

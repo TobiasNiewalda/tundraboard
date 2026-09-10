@@ -38,11 +38,11 @@ Make the evaluation step explicit: if the task has required edge-case statuses o
 
 ## Token budget guidelines
 
-| Task type | Recommended budget |
-| --- | ---: |
-| Single helper, local fix, or autocomplete-style change | 200-400 input tokens |
-| One function plus direct types/signatures | 500-1,500 input tokens |
-| Multi-file refactor with a narrow scope | 1,500-4,000 input tokens |
+| Task type                                                           |              Recommended budget |
+| ------------------------------------------------------------------- | ------------------------------: |
+| Single helper, local fix, or autocomplete-style change              |            200-400 input tokens |
+| One function plus direct types/signatures                           |          500-1,500 input tokens |
+| Multi-file refactor with a narrow scope                             |        1,500-4,000 input tokens |
 | Migration, debugging, security review, or rollback-sensitive change | 4,000+ only with a clear reason |
 
 ## Practical rules

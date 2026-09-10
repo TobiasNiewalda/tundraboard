@@ -14,6 +14,7 @@ other available skill that matches the task; always use
 ## Gather inputs
 
 Before acting, ask the user for the chapter number, lesson number, lesson-content input, and exercise input unless they are already supplied or clearly available at `docs/course_materials/Chapter <chapter>/Lesson <lesson>/`.
+If the supplied lesson-content input or exercise input is copied HTML, invoke `html-to-markdown-exercise-prep` first and use its Markdown output when drafting the lesson artifacts.
 
 ## Apply reasoning-budget learnings
 

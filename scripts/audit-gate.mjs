@@ -14,7 +14,8 @@ const allowedPrismaChain = {
   "deepmerge-ts": {
     severity: "high",
     range: "<8.0.0",
-    title: "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+    title:
+      "DeepmergeTS has stack exhaustion when merging recursive object graphs",
   },
 };
 const allowlistExpiresAt = new Date("2026-12-31T23:59:59.000Z");
@@ -22,9 +23,13 @@ const now = new Date();
 
 const result =
   process.platform === "win32"
-    ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "npm audit --json"], {
-        encoding: "utf8",
-      })
+    ? spawnSync(
+        process.env.ComSpec ?? "cmd.exe",
+        ["/d", "/s", "/c", "npm audit --json"],
+        {
+          encoding: "utf8",
+        },
+      )
     : spawnSync("npm", ["audit", "--json"], {
         encoding: "utf8",
       });
@@ -54,7 +59,9 @@ if (report.error) {
 const vulnerabilities = report.vulnerabilities ?? {};
 const names = Object.keys(vulnerabilities);
 if (result.status !== 0 && names.length === 0) {
-  console.error("npm audit exited with an error before returning vulnerabilities.");
+  console.error(
+    "npm audit exited with an error before returning vulnerabilities.",
+  );
   process.exit(1);
 }
 
@@ -101,11 +108,16 @@ if (unexpected.length > 0) {
 
 if (names.length > 0) {
   if (now > allowlistExpiresAt) {
-    console.error(`The temporary Prisma allowlist expired on ${allowlistExpiresAt.toISOString()}.`);
+    console.error(
+      `The temporary Prisma allowlist expired on ${allowlistExpiresAt.toISOString()}.`,
+    );
     console.error("Please upgrade Prisma to a fixed stable version.");
     process.exit(1);
   }
 
-  console.warn("Allowing the known Prisma advisory chain temporarily:", names.join(", "));
+  console.warn(
+    "Allowing the known Prisma advisory chain temporarily:",
+    names.join(", "),
+  );
   console.warn(`Allowlist expires on ${allowlistExpiresAt.toISOString()}.`);
 }

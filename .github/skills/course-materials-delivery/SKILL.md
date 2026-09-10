@@ -13,6 +13,7 @@ Use this workflow for every course lesson. Optimise for complete, verifiable cou
 2. Convert each explicit requirement into a checklist: required artifacts, experiments, output fields, validations, branch/publish requirements, and exclusions.
 3. Inspect the exercise's submission section before prior course-material outputs. Explicit submission paths, including repository-root artifacts, always override an established documentation layout.
 4. Before creating files, state the intended artifact paths and the evidence each will contain.
+5. If the lesson content or exercise arrives as copied HTML, use `html-to-markdown-exercise-prep` to normalise it to Markdown before drafting `Content.md` and `Exercise.md`.
 
 ## 2. Select the lowest-cost capable worker
 

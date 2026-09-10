@@ -15,6 +15,7 @@
 Implement these changes:
 
 1. `src/routes/labels.ts`
+
 - Import `Router`, `Request`, `Response`, `authenticate`, `prisma`, and `zod`.
 - Add `labelCreateSchema = z.object({ name: z.string().trim().min(1).max(50), colour: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional() })`.
 - Add `router.post("/workspaces/:workspaceId/labels", authenticate, async (req, res, next) => { ... })`.
@@ -30,19 +31,23 @@ Implement these changes:
 - Preserve existing label-router conventions for future `/labels/:id` endpoints.
 
 2. `src/app.ts`
+
 - No change needed if the route is defined with the full path in `labels.ts`.
 - If you prefer nested-router style, mount `app.use("/workspaces/:workspaceId/labels", labelRouter)` and define `router.post("/")`; either approach is acceptable, but use one consistently.
 
 3. `src/middleware/authenticate.ts`
+
 - Must be fully implemented for the route to be usable.
 - It should read `Authorization: Bearer <token>`, verify with `JWT_SECRET`, attach `req.user`, and return `401` for missing/invalid/expired tokens.
 
 4. Error handling
+
 - Keep using the global `errorHandler`.
 - For Prisma duplicate errors, map to `409` with a clear message.
 - For invalid workspace/label references, return `404`/`422` consistently with the repo’s current status-code patterns.
 
 Focused tests to add:
+
 - `tests/labels.test.ts`
   - `201` creates a label in a workspace.
   - `400` rejects invalid `name` / invalid `colour`.
