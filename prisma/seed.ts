@@ -84,7 +84,8 @@ async function main() {
       id: randomUUID(),
       workspaceId: workspace.id,
       title: "API Development",
-      description: "Core TundraBoard REST API — endpoints, services, and middleware.",
+      description:
+        "Core TundraBoard REST API — endpoints, services, and middleware.",
       status: "active",
     },
   });
@@ -94,7 +95,8 @@ async function main() {
       id: randomUUID(),
       workspaceId: workspace.id,
       title: "Frontend",
-      description: "TundraBoard web application — React dashboard and task management UI.",
+      description:
+        "TundraBoard web application — React dashboard and task management UI.",
       status: "active",
     },
   });
@@ -106,7 +108,8 @@ async function main() {
     {
       projectId: apiProject.id,
       title: "Implement user authentication endpoints",
-      description: "Add POST /auth/register and POST /auth/login with JWT token generation.",
+      description:
+        "Add POST /auth/register and POST /auth/login with JWT token generation.",
       status: "in_progress",
       priority: "high",
       assigneeId: alice.id,
@@ -115,7 +118,8 @@ async function main() {
     {
       projectId: apiProject.id,
       title: "Add input validation to task endpoints",
-      description: "Use Zod schemas to validate request bodies for POST and PATCH /tasks.",
+      description:
+        "Use Zod schemas to validate request bodies for POST and PATCH /tasks.",
       status: "todo",
       priority: "high",
       assigneeId: bob.id,
@@ -124,7 +128,8 @@ async function main() {
     {
       projectId: apiProject.id,
       title: "Set up rate limiting on auth endpoints",
-      description: "Prevent brute-force attacks by limiting login attempts to 5 per minute per IP.",
+      description:
+        "Prevent brute-force attacks by limiting login attempts to 5 per minute per IP.",
       status: "todo",
       priority: "medium",
       assigneeId: null,
@@ -133,7 +138,8 @@ async function main() {
     {
       projectId: apiProject.id,
       title: "Add workspace-level authorisation checks",
-      description: "Verify workspace membership before allowing access to projects and tasks.",
+      description:
+        "Verify workspace membership before allowing access to projects and tasks.",
       status: "todo",
       priority: "urgent",
       assigneeId: alice.id,
@@ -142,7 +148,8 @@ async function main() {
     {
       projectId: frontendProject.id,
       title: "Design task board component",
-      description: "Create a Kanban-style board with columns for todo, in_progress, and done.",
+      description:
+        "Create a Kanban-style board with columns for todo, in_progress, and done.",
       status: "in_progress",
       priority: "medium",
       assigneeId: bob.id,
@@ -151,7 +158,8 @@ async function main() {
     {
       projectId: frontendProject.id,
       title: "Add search and filtering to task list",
-      description: "Allow users to search tasks by title and filter by status, priority, and assignee.",
+      description:
+        "Allow users to search tasks by title and filter by status, priority, and assignee.",
       status: "todo",
       priority: "low",
       assigneeId: null,

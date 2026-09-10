@@ -8,7 +8,7 @@
 
 ## Prompt
 
-~~~text
+```text
 Refactor the `authenticate` middleware in `src/middleware/authenticate.ts` into a production-ready JWT middleware. Return only the code changes needed, with no explanation. Preserve the repository's TypeScript and Express conventions, and keep the existing 401 error shape if you add one.
 
 Use the supplied context to infer the correct implementation:
@@ -23,9 +23,9 @@ import type { Request, Response, NextFunction } from "express";
 export function authenticate(_req: Request, res: Response, _next: NextFunction): void {
   res.status(501).json({ error: { message: "Authentication not implemented" } });
 }
-~~~
+```
 
-~~~ts
+```ts
 declare namespace Express {
   interface Request {
     user?: {
@@ -35,9 +35,9 @@ declare namespace Express {
     };
   }
 }
-~~~
+```
 
-~~~ts
+```ts
 export const errorHandler = (err, _req, res, _next) => {
   res.status(err.status ?? err.statusCode ?? 500).json({
     error: {
@@ -45,8 +45,9 @@ export const errorHandler = (err, _req, res, _next) => {
     },
   });
 };
-~~~
-~~~
+```
+
+```
 
 ## Response
 
@@ -109,4 +110,4 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     unauthorized(res);
   }
 }
-~~~
+```

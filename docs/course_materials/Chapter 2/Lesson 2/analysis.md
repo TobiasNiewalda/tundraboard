@@ -7,10 +7,10 @@ I used `src/middleware/authenticate.ts` as the refactoring target because this r
 ## Comparison
 
 | Strategy | Correctness | Convention adherence | Completeness | Est. input tokens | Latency |
-| --- | --- | --- | --- | ---: | ---: |
-| Minimal | 3/5 | 2/5 | 2/5 | ~200-400 | ~60s |
-| Targeted | 5/5 | 5/5 | 5/5 | ~300-700 | ~60s |
-| Full | 5/5 | 5/5 | 5/5 | ~1,900-3,600 | ~60s |
+| -------- | ----------- | -------------------- | ------------ | ----------------: | ------: |
+| Minimal  | 3/5         | 2/5                  | 2/5          |          ~200-400 |    ~60s |
+| Targeted | 5/5         | 5/5                  | 5/5          |          ~300-700 |    ~60s |
+| Full     | 5/5         | 5/5                  | 5/5          |      ~1,900-3,600 |    ~60s |
 
 ## Observations
 

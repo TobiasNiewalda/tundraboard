@@ -1,0 +1,42 @@
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Dependency and build output
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.next/
+out/
+
+# Logs
+*.log
+logs/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local database and cache files
+*.sqlite
+*.sqlite3
+*.db
+.tmp/
+tmp/
+.cache/
+
+# Git metadata
+.git/
+.gitignore
+
+# Generated Prisma artifacts if you want to keep them out of AI scans
+prisma/migrations/

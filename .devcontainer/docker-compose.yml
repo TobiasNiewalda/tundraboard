@@ -1,0 +1,31 @@
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    user: node
+    working_dir: /workspaces/tundraboard
+    volumes:
+      - ..:/workspaces/tundraboard:cached
+    command: sleep infinity
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/tundraboard_dev
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: tundraboard_dev
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tundraboard_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

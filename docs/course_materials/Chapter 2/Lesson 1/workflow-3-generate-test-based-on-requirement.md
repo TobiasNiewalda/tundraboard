@@ -1,9 +1,11 @@
 # Workflow: Generate a Test Based on a Requirement
 
 ## Trigger
+
 Use this workflow when a requirement is approved and needs end-to-end or acceptance test coverage before implementation work begins.
 
 ## Prerequisites/Context
+
 - The approved requirement text and description field
 - The test framework and directory conventions
 - Existing examples of similar end-to-end tests
@@ -11,6 +13,7 @@ Use this workflow when a requirement is approved and needs end-to-end or accepta
 - Cleanup, timing, and parallelization constraints
 
 ## Prompt sequence
+
 1. **Requirement breakdown** — **Tool slot:** Slot 3. **Pattern:** CoT
    Prompt: `Think step by step about <REQUIREMENT>. List the user-facing outcomes, happy path, failure cases, and the minimum acceptance scenarios that should be covered before implementation starts.`
 
@@ -24,6 +27,7 @@ Use this workflow when a requirement is approved and needs end-to-end or accepta
    Prompt: `As a QA reviewer, inspect the test for timing risks, cleanup problems, parallelization issues, and fragile assertions. State any improvements needed before the test can be relied on.`
 
 ## Verification checklist
+
 - [ ] The test maps directly to an approved requirement
 - [ ] The GIVEN-WHEN-THEN structure is clear
 - [ ] The test uses the project’s actual framework conventions

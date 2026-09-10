@@ -16,11 +16,12 @@ Good — routes are unimplemented specs. This confirms scope: only schema, seed,
 
 ## Soft-Deletion Plan: Task, Project, Label (deleted_at)
 
-**Current state:** Routes (`tasks.ts`, `projects.ts`, `labels.ts`) are unimplemented TODO stubs — no live Prisma queries to migrate. Only `prisma/seed.ts` and `prisma/schema.prisma` contain real DB calls today. This significantly reduces call-site risk but means the plan must also guide the *not-yet-written* route implementations.
+**Current state:** Routes (`tasks.ts`, `projects.ts`, `labels.ts`) are unimplemented TODO stubs — no live Prisma queries to migrate. Only `prisma/seed.ts` and `prisma/schema.prisma` contain real DB calls today. This significantly reduces call-site risk but means the plan must also guide the _not-yet-written_ route implementations.
 
 **Schema changes** (`prisma/schema.prisma`): add `deletedAt DateTime? @map("deleted_at") @db.Timestamptz` to `Task`, `Project`, `Label`. Add `@@index([deletedAt])` on each for filtered-scan performance.
 
 **Uniqueness/relation implications:**
+
 - `Label` has `@@unique([workspaceId, name])`. A soft-deleted label still occupies that unique slot, blocking recreation of a same-named label. Options: (a) partial unique index `WHERE deleted_at IS NULL` (requires raw SQL migration, Prisma doesn't support partial unique natively — use `@@index` + manual SQL `CREATE UNIQUE INDEX ... WHERE deleted_at IS NULL`), or (b) keep constraint and require rename-on-delete. Recommend (a).
 - Cascades: `onDelete: Cascade` (Project→Task, Task→Comment/TaskLabel/Attachment) only fires on hard delete. Soft-deleting a Project won't cascade-soft-delete its Tasks — application logic must explicitly cascade `deletedAt` to child Tasks (and Task→TaskLabel/Comments/Attachments if hiding children is desired), or accept orphaned "visible child under soft-deleted parent" and filter at query time via join checks.
 - `TaskLabel` (join table) has no `deletedAt`; row cleanup on task/label soft-delete needs explicit handling (leave rows, filter via joined Task/Label deletedAt).
@@ -30,6 +31,7 @@ Good — routes are unimplemented specs. This confirms scope: only schema, seed,
 **Migration files:** new migration `add_deleted_at_soft_delete` — additive `ALTER TABLE ... ADD COLUMN deleted_at`, indexes, partial unique index replacing old unique constraint. Purely additive/non-breaking; no backfill needed (NULL default = "active").
 
 **Staged rollout:**
+
 1. Deploy migration (additive, safe, no app changes required simultaneously).
 2. Deploy Prisma client regen + shared "active-only" query helpers/extension.
 3. Implement route DELETE handlers to set `deletedAt: new Date()` instead of `prisma.*.delete()`; implement cascade logic for Project→Task.

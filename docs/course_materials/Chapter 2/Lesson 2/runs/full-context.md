@@ -8,7 +8,7 @@
 
 ## Prompt
 
-~~~text
+````text
 Refactor the `authenticate` middleware in `src/middleware/authenticate.ts` into a production-ready JWT middleware. Return only the code changes needed, with no explanation. Preserve the repository's TypeScript and Express conventions, and keep the existing 401 error shape if you add one.
 
 Context:
@@ -227,3 +227,4 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   }
 }
 ```
+````

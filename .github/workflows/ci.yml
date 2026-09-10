@@ -15,45 +15,12 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run db:generate
       - run: npm run typecheck
 
   lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
-      - run: npm ci
-      - run: npm run lint
-
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
-      - run: npm ci
-      - run: npm run format:check
-
-  security-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: ".nvmrc"
-          cache: "npm"
-      - run: npm ci
-      - run: npm run audit:gate
-      - run: npm audit signatures
-
-  test:
     needs: type-check
     runs-on: ubuntu-latest
     steps:
@@ -62,6 +29,47 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  format:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+
+  security-audit:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run audit:gate
+      - run: npm audit signatures
+
+  test:
+    needs: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run db:generate
       - run: npm run test:coverage
