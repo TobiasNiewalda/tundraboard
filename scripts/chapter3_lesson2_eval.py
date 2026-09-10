@@ -83,6 +83,12 @@ def extract_title_tokens(title: str) -> set[str]:
     return tokens
 
 
+def has_title_grounding(title: str, output: str) -> bool:
+    title_tokens = extract_title_tokens(title)
+    output_tokens = extract_title_tokens(output)
+    return bool(title_tokens & output_tokens)
+
+
 def has_british_spelling(text: str) -> bool:
     american = {"behavior": "behaviour", "optimize": "optimise", "optimized": "optimised", "organize": "organise", "color": "colour"}
     lowered = text.lower()
@@ -114,13 +120,14 @@ def output_checks(record: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, An
         checks.append("american_spelling")
 
     # Grounding heuristic: invented technical specifics not in title
-    title_tokens = extract_title_tokens(title)
     invented_markers = []
     for marker in [r"src/[A-Za-z0-9_./-]+", r"tests/[A-Za-z0-9_./-]+", r"[A-Za-z0-9_./-]+\.(ts|tsx|js|py)", r"`[^`]+`"]:
         if re.search(marker, output):
             invented_markers.append(marker)
     if invented_markers:
         checks.append("invented_technical_specifics")
+    if not has_title_grounding(title, output):
+        checks.append("ungrounded_output")
     title_lower = title.lower()
     if "safari" not in title_lower and "safari" in output.lower():
         checks.append("invented_platform_detail")

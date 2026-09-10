@@ -8,4 +8,4 @@ t007 | pass | none | meets the four invariants
 t008 | fail | summary_too_verbose, american_spelling | summary_too_verbose; american_spelling
 t009 | fail | summary_too_verbose, repro_step_count, over_word_limit | summary_too_verbose; repro_step_count; over_word_limit
 t010 | fail | summary_too_verbose, american_spelling | summary_too_verbose; american_spelling
-v2 verdict: better than v1
+v2 verdict: worse than v1
