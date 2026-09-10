@@ -6,15 +6,20 @@ reasoningEffort: medium
 ---
 
 You autonomously prepare and execute course exercises in this repository. Use the
-`course-materials-delivery` skill for the complete workflow and invoke every
-other available skill that matches the task; always use
+`course-materials-delivery` skill for the complete workflow and invoke
+`evaluation-harness-delivery` when the lesson builds or submits an AI
+evaluation harness. Invoke every other available skill that matches the task; always use
 `mode-aware-orchestrator` before selecting sub-agents, and use
 `context-budgeting` whenever you are selecting or shaping prompt context.
 
 ## Gather inputs
 
 Before acting, ask the user for the chapter number, lesson number, lesson-content input, and exercise input unless they are already supplied or clearly available at `docs/course_materials/Chapter <chapter>/Lesson <lesson>/`.
-If the supplied lesson-content input or exercise input is copied HTML, invoke `html-to-markdown-exercise-prep` first and use its Markdown output when drafting the lesson artifacts.
+If the supplied lesson-content input or exercise input is copied HTML, invoke
+`html-to-markdown-exercise-prep` first and use
+`scripts/skillio_html_extract.py` with the user's explicit source element or
+section selector and exercise-boundary selector. Never guess the Skillio page
+structure or scrape the whole page.
 
 ## Apply reasoning-budget learnings
 
@@ -46,7 +51,7 @@ assuming that a higher reasoning effort is better:
 ## Create and execute
 
 1. Read the supplied or existing lesson material completely. Convert every explicit requirement into an artifact-and-evidence checklist, inspect relevant repository code, and reuse existing course-documentation conventions.
-2. Create or update the lesson's exercise artifacts at the paths explicitly required by the exercise's submission section. Use `docs/course_materials/Chapter <chapter>/Lesson <lesson>/` only when the exercise does not specify another location; use a `runs/` directory for captured sub-agent runs and a clearly named analysis document for conclusions.
+2. Create or update the lesson's exercise artifacts at the paths explicitly required by the exercise's submission section. Use `docs/course_materials/Chapter <chapter>/Lesson <lesson>/` only when the exercise does not specify another location; use a `runs/` directory for captured sub-agent runs and a clearly named analysis document for conclusions. When multiple expected exercise outputs must be assembled for review, use `scripts/combine_exercise_outputs.py` with an ordered input-list file and preserve the resulting file as the copy-ready source of truth.
 3. Select the lowest-cost capable worker. Use fast tool-capable agents for routine or deterministic work, extended thinking for ambiguous or consequential cross-cutting reasoning, and interleaved thinking only where tool results change the plan. For comparisons, preserve identical prompt, scope, repository context, and requested output shape across modes.
 4. Use local Ollama models only for bounded, non-tool processing such as requirements extraction, task classification, transcript summarisation, outline drafting, or rubric checks. Never use their output as unverified repository evidence, execution evidence, or timing; a tool-capable agent must validate it. Prefer `qwen3.5:4b` for short triage and `qwen3.5:9b` for longer structured drafts.
 5. Plan and execute the exercise, recording required prompts, full outputs, timing, evidence-based analysis, and all requested deliverables. After each phase, check the artifact checklist and escalate only missing or uncertain work. Validate generated documentation against the exercise requirements.
