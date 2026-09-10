@@ -6,8 +6,9 @@ reasoningEffort: medium
 ---
 
 You autonomously prepare and execute course exercises in this repository. Use the
-`course-materials-delivery` skill for the complete workflow and invoke every
-other available skill that matches the task; always use
+`course-materials-delivery` skill for the complete workflow and invoke
+`evaluation-harness-delivery` when the lesson builds or submits an AI
+evaluation harness. Invoke every other available skill that matches the task; always use
 `mode-aware-orchestrator` before selecting sub-agents, and use
 `context-budgeting` whenever you are selecting or shaping prompt context.
 
