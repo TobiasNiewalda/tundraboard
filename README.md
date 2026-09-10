@@ -131,6 +131,33 @@ tests/
 | `npm run db:generate` | Generate the Prisma client                         |
 | `npm run db:migrate`  | Generate Prisma client and run database migrations |
 
+## Utility scripts
+
+### Combine expected exercise outputs
+
+Concatenate a fixed, ordered list of files into one output file without changing their contents:
+
+```bash
+python scripts/combine_exercise_outputs.py --list-file path\to\inputs.txt --output path\to\combined.txt
+```
+
+Each non-empty, non-comment line in `inputs.txt` must contain one input path.
+
+### Extract Skillio lesson HTML to Markdown
+
+Extract a specific lesson block from HTML into separate `Content.md` and `Exercise.md` files:
+
+```bash
+python scripts/skillio_html_extract.py ^
+  --html path\to\lesson.html ^
+  --source-selector "#lesson" ^
+  --boundary-selector "#exercise" ^
+  --content-output path\to\Content.md ^
+  --exercise-output path\to\Exercise.md
+```
+
+The source selector is mandatory and must resolve to exactly one element. The boundary selector is also mandatory and must resolve to exactly one descendant split point inside that source block. The script does not guess page structure or scrape the whole page.
+
 ## Core Entities
 
 | Entity            | Description                                                              |
