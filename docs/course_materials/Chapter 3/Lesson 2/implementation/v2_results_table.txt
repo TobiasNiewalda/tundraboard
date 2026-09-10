@@ -1,0 +1,11 @@
+t001 | fail | summary_too_verbose, repro_step_count, acceptance_criteria_count, over_word_limit, invented_technical_specifics | summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics
+t002 | fail | summary_too_verbose, repro_step_count, over_word_limit | summary_too_verbose; repro_step_count; over_word_limit
+t003 | fail | summary_too_verbose, repro_step_count, acceptance_criteria_count, over_word_limit, invented_technical_specifics | summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics
+t004 | pass | none | meets the four invariants
+t005 | fail | summary_too_verbose, repro_step_count, over_word_limit | summary_too_verbose; repro_step_count; over_word_limit
+t006 | fail | summary_too_verbose, invented_technical_specifics | summary_too_verbose; invented_technical_specifics
+t007 | pass | none | meets the four invariants
+t008 | fail | summary_too_verbose, american_spelling | summary_too_verbose; american_spelling
+t009 | fail | summary_too_verbose, repro_step_count, over_word_limit | summary_too_verbose; repro_step_count; over_word_limit
+t010 | fail | summary_too_verbose, american_spelling | summary_too_verbose; american_spelling
+v2 verdict: worse than v1

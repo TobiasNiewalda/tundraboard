@@ -1,0 +1,320 @@
+{
+  "judge_mode": "local",
+  "judged_model_family": "Gemini",
+  "pipeline_model_family": "Claude",
+  "per_input_scores": [
+    {
+      "id": "t001",
+      "title": "Fix login bug",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "acceptance_criteria_count",
+        "over_word_limit",
+        "invented_technical_specifics"
+      ],
+      "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+      "metrics": {
+        "word_count": 270,
+        "summary_words": 63,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t002",
+      "title": "Speed up the workspace dashboard",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "over_word_limit"
+      ],
+      "why": "summary_too_verbose; repro_step_count; over_word_limit",
+      "metrics": {
+        "word_count": 267,
+        "summary_words": 71,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t003",
+      "title": "Tasks sometimes duplicate when dragged between columns",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "acceptance_criteria_count",
+        "over_word_limit",
+        "invented_technical_specifics"
+      ],
+      "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+      "metrics": {
+        "word_count": 272,
+        "summary_words": 69,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t004",
+      "title": "Add dark mode toggle",
+      "human_pass": true,
+      "judge_pass": true,
+      "agree": true,
+      "verdict": "pass",
+      "failed_checks": [],
+      "why": "meets the four invariants",
+      "metrics": {
+        "word_count": 94,
+        "summary_words": 18,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t005",
+      "title": "Email notifications arriving late",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "over_word_limit"
+      ],
+      "why": "summary_too_verbose; repro_step_count; over_word_limit",
+      "metrics": {
+        "word_count": 282,
+        "summary_words": 81,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t006",
+      "title": "Project archive button does nothing on Safari",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": ["summary_too_verbose", "invented_technical_specifics"],
+      "why": "summary_too_verbose; invented_technical_specifics",
+      "metrics": {
+        "word_count": 110,
+        "summary_words": 27,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t007",
+      "title": "Support @mentions in task comments",
+      "human_pass": true,
+      "judge_pass": true,
+      "agree": true,
+      "verdict": "pass",
+      "failed_checks": [],
+      "why": "meets the four invariants",
+      "metrics": {
+        "word_count": 101,
+        "summary_words": 19,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t008",
+      "title": "CSV export of tasks is missing due dates",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": ["summary_too_verbose", "american_spelling"],
+      "why": "summary_too_verbose; american_spelling",
+      "metrics": {
+        "word_count": 123,
+        "summary_words": 44,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t009",
+      "title": "Keyboard shortcut for creating a task",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "over_word_limit"
+      ],
+      "why": "summary_too_verbose; repro_step_count; over_word_limit",
+      "metrics": {
+        "word_count": 276,
+        "summary_words": 80,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "id": "t010",
+      "title": "Workspace invites expire too quickly",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": ["summary_too_verbose", "american_spelling"],
+      "why": "summary_too_verbose; american_spelling",
+      "metrics": {
+        "word_count": 131,
+        "summary_words": 41,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "pass_rate": 0.2,
+    "agreement_rate": 1.0,
+    "count": 10
+  },
+  "confusion_matrix": {
+    "true_positive": 2,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0
+  },
+  "raw_per_item_reports": [
+    {
+      "input_id": "t001",
+      "title": "Fix login bug",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "acceptance_criteria_count",
+        "over_word_limit",
+        "invented_technical_specifics"
+      ],
+      "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+      "metrics": {
+        "word_count": 270,
+        "summary_words": 63,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "input_id": "t002",
+      "title": "Speed up the workspace dashboard",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "over_word_limit"
+      ],
+      "why": "summary_too_verbose; repro_step_count; over_word_limit",
+      "metrics": {
+        "word_count": 267,
+        "summary_words": 71,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    },
+    {
+      "input_id": "t003",
+      "title": "Tasks sometimes duplicate when dragged between columns",
+      "human_pass": false,
+      "judge_pass": false,
+      "agree": true,
+      "verdict": "fail",
+      "failed_checks": [
+        "summary_too_verbose",
+        "repro_step_count",
+        "acceptance_criteria_count",
+        "over_word_limit",
+        "invented_technical_specifics"
+      ],
+      "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+      "metrics": {
+        "word_count": 272,
+        "summary_words": 69,
+        "sections_present": {
+          "Summary": true,
+          "Reproduction steps": true,
+          "Acceptance criteria": true,
+          "Estimated complexity": true
+        }
+      }
+    }
+  ]
+}

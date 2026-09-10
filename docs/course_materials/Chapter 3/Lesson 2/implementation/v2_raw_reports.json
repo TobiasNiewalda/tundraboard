@@ -1,0 +1,78 @@
+[
+  {
+    "input_id": "t001",
+    "title": "Fix login bug",
+    "human_pass": false,
+    "judge_pass": false,
+    "agree": true,
+    "verdict": "fail",
+    "failed_checks": [
+      "summary_too_verbose",
+      "repro_step_count",
+      "acceptance_criteria_count",
+      "over_word_limit",
+      "invented_technical_specifics"
+    ],
+    "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+    "metrics": {
+      "word_count": 270,
+      "summary_words": 63,
+      "sections_present": {
+        "Summary": true,
+        "Reproduction steps": true,
+        "Acceptance criteria": true,
+        "Estimated complexity": true
+      }
+    }
+  },
+  {
+    "input_id": "t002",
+    "title": "Speed up the workspace dashboard",
+    "human_pass": false,
+    "judge_pass": false,
+    "agree": true,
+    "verdict": "fail",
+    "failed_checks": [
+      "summary_too_verbose",
+      "repro_step_count",
+      "over_word_limit"
+    ],
+    "why": "summary_too_verbose; repro_step_count; over_word_limit",
+    "metrics": {
+      "word_count": 267,
+      "summary_words": 71,
+      "sections_present": {
+        "Summary": true,
+        "Reproduction steps": true,
+        "Acceptance criteria": true,
+        "Estimated complexity": true
+      }
+    }
+  },
+  {
+    "input_id": "t003",
+    "title": "Tasks sometimes duplicate when dragged between columns",
+    "human_pass": false,
+    "judge_pass": false,
+    "agree": true,
+    "verdict": "fail",
+    "failed_checks": [
+      "summary_too_verbose",
+      "repro_step_count",
+      "acceptance_criteria_count",
+      "over_word_limit",
+      "invented_technical_specifics"
+    ],
+    "why": "summary_too_verbose; repro_step_count; acceptance_criteria_count; over_word_limit; invented_technical_specifics",
+    "metrics": {
+      "word_count": 272,
+      "summary_words": 69,
+      "sections_present": {
+        "Summary": true,
+        "Reproduction steps": true,
+        "Acceptance criteria": true,
+        "Estimated complexity": true
+      }
+    }
+  }
+]
