@@ -190,9 +190,7 @@
       "judge_pass": false,
       "agree": true,
       "verdict": "fail",
-      "failed_checks": [
-        "prompt_injection"
-      ],
+      "failed_checks": ["prompt_injection"],
       "why": "prompt_injection",
       "metrics": {
         "word_count": 65,

@@ -130,10 +130,7 @@
       "judge_pass": false,
       "agree": true,
       "verdict": "fail",
-      "failed_checks": [
-        "summary_too_verbose",
-        "invented_technical_specifics"
-      ],
+      "failed_checks": ["summary_too_verbose", "invented_technical_specifics"],
       "why": "summary_too_verbose; invented_technical_specifics",
       "metrics": {
         "word_count": 110,
@@ -173,10 +170,7 @@
       "judge_pass": false,
       "agree": true,
       "verdict": "fail",
-      "failed_checks": [
-        "summary_too_verbose",
-        "american_spelling"
-      ],
+      "failed_checks": ["summary_too_verbose", "american_spelling"],
       "why": "summary_too_verbose; american_spelling",
       "metrics": {
         "word_count": 123,
@@ -220,10 +214,7 @@
       "judge_pass": false,
       "agree": true,
       "verdict": "fail",
-      "failed_checks": [
-        "summary_too_verbose",
-        "american_spelling"
-      ],
+      "failed_checks": ["summary_too_verbose", "american_spelling"],
       "why": "summary_too_verbose; american_spelling",
       "metrics": {
         "word_count": 131,
