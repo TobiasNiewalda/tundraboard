@@ -1,10 +1,7 @@
 # Lesson 2 Submission: Extend Your AI Agent with MCP Tools for TundraBoard
 
 ## Scope
-
-This submission documents the Lesson 2 exercise against the current TundraBoard repository state.
-
-The exercise is primarily about comparing CLI-based external access with MCP-based external access, documenting the MCP configuration, and using external tooling to complete a repository analysis task. The current agent environment exposes shell access and GitHub CLI, but it does not expose a direct MCP client session as a callable tool, so this submission records the existing MCP configuration in the repo and demonstrates the closest equivalent using `gh`.
+The exercise is primarily about comparing CLI-based external access with MCP-based external access, documenting the MCP configuration, and using external tooling to complete a repository analysis task. The current agent environment exposes shell access and GitHub CLI, but it does not expose an MCP client layer that can load `mcp-config.json` and register those servers into the agent's tool registry. In practice, this means the environment can launch local processes with shell commands, but it cannot become an MCP-aware host the way VS Code Copilot or Claude Code can. This submission records the existing MCP configuration in the repo and demonstrates the closest equivalent using `gh`.
 
 ## Exercise Checklist
 
@@ -71,7 +68,7 @@ Sample result:
 
 ## 1. MCP Server Configuration
 
-The repository already contains an MCP configuration file at `mcp-config.json`. No new MCP servers were added for this submission; I documented the existing ones.
+The repository already contains an MCP configuration file at `mcp-config.json`. No new MCP servers were added for this submission; I documented the existing ones and tightened the GitHub server to make its least-privilege scope explicit.
 
 ```json
 {
@@ -110,7 +107,10 @@ The repository already contains an MCP configuration file at `mcp-config.json`. 
         "127.0.0.1:8085:8085",
         "-e",
         "GITHUB_OAUTH_CALLBACK_PORT",
-        "ghcr.io/github/github-mcp-server"
+        "ghcr.io/github/github-mcp-server",
+        "--read-only",
+        "--toolsets",
+        "repos,pull_requests,actions"
       ],
       "env": {
         "GITHUB_OAUTH_CALLBACK_PORT": "8085"
@@ -148,26 +148,26 @@ The repository already contains an MCP configuration file at `mcp-config.json`. 
 }
 ```
 
-Note: the config file does not store plaintext credentials. It uses environment variables and runtime authentication where needed.
+Note: the config file does not store plaintext credentials. It uses environment variables and runtime authentication where needed. For a production GitHub MCP setup, the token should be scoped to read-only repository and pull-request metadata rather than admin or write permissions.
 
-### MCP inventory and permissions
+## 2. Documentation: MCP inventory and permissions
 
 | Server | What it exposes | Permissions / scope | Security notes |
 |---|---|---|---|
 | `memory` | Persistent agent memory via `@modelcontextprotocol/server-memory` | Local memory file path only | Low risk; scoped to the memory store |
 | `sequential-thinking` | Structured reasoning support | No external data access | Low risk; reasoning-only helper |
-| `github` | GitHub repository access via `ghcr.io/github/github-mcp-server` | GitHub access through the container runtime | Useful for repo, PR, and CI workflows; should be kept as narrow as possible in production |
+| `github` | GitHub repository access via `ghcr.io/github/github-mcp-server` | GitHub access through the container runtime; explicitly limited to `repos,pull_requests,actions` and `--read-only` | Useful for repo, PR, and CI workflows; kept narrow for least privilege |
 | `filesystem` | Workspace file access | Entire workspace folder | Broad but appropriate for repo-local work |
 | `fetch` | HTTP fetch tool for reading web resources | Network access through fetch requests | Use only against trusted endpoints |
 | `browserbase` | Browser automation / remote browser access | Networked browser control | Treat as high trust; review any opened pages carefully |
 
-## 2. External-Access Task
+## 3. External-Access Task
 
 The external-access task I used for the exercise was:
 
 > Walk the merged pull requests on the TundraBoard repository and summarize which files change most often, and what that says about where the codebase is unstable.
 
-I used GitHub CLI for this analysis because the current environment did not expose the MCP GitHub server as a directly callable tool, even though the repository already contains an MCP configuration for it.
+I used GitHub CLI for this analysis because the current environment did not expose the MCP GitHub server as a directly callable tool, even though the repository already contains an MCP configuration for it. The barrier was architectural, not just operational: this agent session does not have an MCP host bridge that can read `mcp-config.json`, start the servers, and expose their tools to the model.
 
 Command run:
 
@@ -214,6 +214,36 @@ That suggests the codebase instability is concentrated around dependency hygiene
 - Structured tool discovery: the agent would know which repo tools are available without memorizing `gh` flags.
 - Better permission scoping: a GitHub MCP server could be configured to expose only the tools needed for repo inspection.
 - Reusability: the same MCP configuration could be shared across tools and users instead of repeating shell setup.
+
+### How I would wire it in an MCP-native host
+
+In a host that natively supports MCP server registration, the GitHub server would be declared with the same tool shape and then loaded by the host instead of by shell-only execution. For VS Code Copilot, the host-side shape uses a `servers` map such as:
+
+```json
+{
+  "servers": {
+    "github": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-p",
+        "127.0.0.1:8085:8085",
+        "-e",
+        "GITHUB_OAUTH_CALLBACK_PORT",
+        "ghcr.io/github/github-mcp-server",
+        "--read-only",
+        "--toolsets",
+        "repos,pull_requests,actions"
+      ]
+    }
+  }
+}
+```
+
+That wiring is the important distinction: an MCP-native host loads the server definition and exposes the resulting tools to the model. This environment can only run the Docker or `npx` command; it cannot attach the server to the agent as an MCP tool source.
 
 ### Security assessment
 
