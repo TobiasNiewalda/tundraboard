@@ -97,11 +97,13 @@ The mixed strategy costs about 58% of the all-reasoning approach while keeping r
 
 ### Per-developer daily caps
 
+These caps are interactive-usage pools, not one shared daily ceiling. A developer's normal quick and generation traffic can stay within those separate budgets while the reasoning pool is reserved for high-stakes work. CI/CD usage is budgeted separately under the pipeline-stage budgets and monthly team budget, so ordinary interactive workflows do not get throttled just because the team had a busy day.
+
 | Tier | Daily cap | Fallback behavior |
 | --- | ---: | --- |
 | Quick | 5,000 input / 2,000 output | Fall back to cached snippets and template completions first |
 | Generation | 12,000 input / 6,000 output | Prune context, then downgrade low-risk drafting to quick tier |
-| Reasoning | 4,000 input / 2,000 output | Prune context first; if still over budget, queue the request or require lead approval |
+| Reasoning | 6,000 input / 3,000 output | Prune context first; if still over budget, queue the request or require lead approval |
 
 ### Pipeline-stage budgets
 
@@ -138,9 +140,9 @@ If I budget this team at $400/month, the alert points become:
 
 | Optimisation | What changes | Estimated monthly reduction | Why it helps |
 | --- | --- | ---: | --- |
-| Context pruning | Send only changed files, interfaces, and relevant policy context | ~$40-$45 | Input tokens dominate reasoning-stage cost |
-| Prompt caching | Keep stable instructions and conventions at the start of repeated prompts | ~$25-$35 | PR review and security prompts reuse the same prefix |
-| Response length control | Ask for short summaries and targeted outputs | ~$10-$20 | Cuts visible output tokens, especially in summaries and docs |
+| Context pruning | Send only changed files, interfaces, and relevant policy context | ~$40-$45 | Quality impact: low risk when the task is local and pattern-based; medium risk if pruning removes cross-file context needed to spot architecture regressions or multi-file security issues. Before accepting a result, verify that all affected files and relevant cross-file dependencies were included; widen context or escalate if they were not. |
+| Prompt caching | Keep stable instructions and conventions at the start of repeated prompts | ~$25-$35 | Quality impact: usually neutral because the cached prefix is static policy, but stale cached conventions can bias reviews if standards change. Cache only stable instructions and refresh the prefix whenever repo conventions or policies change. |
+| Response length control | Ask for short summaries and targeted outputs | ~$10-$20 | Quality impact: low risk for summaries and docs, but aggressive limits can truncate rationale or omit edge cases. Require a complete verdict and findings list; if the response is truncated or omits required justification, retry with a larger output budget. |
 
 These savings overlap, so they should not be added mechanically. Applied together, they should move the team noticeably below the baseline mixed-strategy spend.
 
