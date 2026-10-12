@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const work = join(root, "tests", "fixtures", "utility-scripts");
@@ -16,9 +16,24 @@ beforeEach(() => {
 });
 
 function py(script: string, args: string[]) {
-  return execFileSync("py", ["-3", join(root, "scripts", script), ...args], {
-    encoding: "utf8",
-  });
+  const candidates = [
+    ["python3", []],
+    ["python", []],
+    ["py", ["-3"]],
+  ] as const;
+
+  for (const [command, prefixArgs] of candidates) {
+    const probe = spawnSync(command, [...prefixArgs, "--version"], {
+      encoding: "utf8",
+    });
+    if (!probe.error && probe.status === 0) {
+      return execFileSync(command, [...prefixArgs, join(root, "scripts", script), ...args], {
+        encoding: "utf8",
+      });
+    }
+  }
+
+  throw new Error("No usable Python interpreter found for utility script tests");
 }
 
 describe("combine_exercise_outputs", () => {
