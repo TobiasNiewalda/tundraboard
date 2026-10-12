@@ -1,10 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 const work = join(root, "tests", "fixtures", "utility-scripts");
+
+afterEach(() => {
+  rmSync(work, { recursive: true, force: true });
+});
+
+beforeEach(() => {
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+});
 
 function py(script: string, args: string[]) {
   return execFileSync("python", [join(root, "scripts", script), ...args], {

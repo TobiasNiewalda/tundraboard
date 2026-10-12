@@ -1,7 +1,7 @@
 ---
 name: course-exercise-orchestrator
 description: Collect course inputs, create exercise documentation, coordinate execution, and publish an exercise branch.
-model: gpt-5.6-terra
+model: qwen3.5:9b (ollama)
 reasoningEffort: medium
 ---
 

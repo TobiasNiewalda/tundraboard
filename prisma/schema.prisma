@@ -89,6 +89,7 @@ model Task {
   assigneeId  String?   @map("assignee_id") @db.Uuid
   createdById String    @map("created_by_id") @db.Uuid
   dueDate     DateTime? @map("due_date") @db.Timestamptz
+  estimatedHours Int?   @map("estimated_hours")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -103,6 +104,7 @@ model Task {
   @@index([projectId])
   @@index([assigneeId])
   @@index([status])
+  @@index([estimatedHours])
   @@map("tasks")
 }
 
