@@ -48,7 +48,9 @@ taskRouter.get("/", async (req, res) => {
   const parsedQuery = taskListQuerySchema.safeParse(req.query);
 
   if (!parsedQuery.success) {
-    res.status(400).json({ error: getValidationErrorMessage(parsedQuery.error) });
+    res
+      .status(400)
+      .json({ error: getValidationErrorMessage(parsedQuery.error) });
     return;
   }
 
@@ -64,7 +66,9 @@ taskRouter.post("/", async (req, res) => {
   const parsedBody = taskCreateSchema.safeParse(req.body);
 
   if (!parsedBody.success) {
-    res.status(400).json({ error: getValidationErrorMessage(parsedBody.error) });
+    res
+      .status(400)
+      .json({ error: getValidationErrorMessage(parsedBody.error) });
     return;
   }
 
@@ -80,7 +84,9 @@ taskRouter.patch("/:id", async (req, res) => {
   const parsedBody = taskUpdateSchema.safeParse(req.body);
 
   if (!parsedBody.success) {
-    res.status(400).json({ error: getValidationErrorMessage(parsedBody.error) });
+    res
+      .status(400)
+      .json({ error: getValidationErrorMessage(parsedBody.error) });
     return;
   }
 

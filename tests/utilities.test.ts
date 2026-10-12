@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 function py(script: string, args: string[]) {
-  return execFileSync("python", [join(root, "scripts", script), ...args], {
+  return execFileSync("py", ["-3", join(root, "scripts", script), ...args], {
     encoding: "utf8",
   });
 }

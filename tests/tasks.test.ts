@@ -250,9 +250,11 @@ describe("task characterisation", () => {
       },
     ]);
 
-    const response = await request(app)
-      .get("/tasks")
-      .query({ estimatedHours: "3", sortBy: "estimatedHours", sortOrder: "desc" });
+    const response = await request(app).get("/tasks").query({
+      estimatedHours: "3",
+      sortBy: "estimatedHours",
+      sortOrder: "desc",
+    });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([
@@ -277,17 +279,17 @@ describe("task characterisation", () => {
     });
   });
 
-  it.each([
-    ["-5"],
-    ["banana"],
-  ])("rejects invalid estimated hours query input %s", async (estimatedHours) => {
-    const response = await request(app)
-      .get("/tasks")
-      .query({ estimatedHours });
+  it.each([["-5"], ["banana"]])(
+    "rejects invalid estimated hours query input %s",
+    async (estimatedHours) => {
+      const response = await request(app)
+        .get("/tasks")
+        .query({ estimatedHours });
 
-    expect(response.status).toBe(400);
-    expect(prismaMock.task.findMany).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(400);
+      expect(prismaMock.task.findMany).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects invalid estimated hours input", async () => {
     const response = await request(app).post("/tasks").send({
