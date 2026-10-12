@@ -27,13 +27,19 @@ function py(script: string, args: string[]) {
       encoding: "utf8",
     });
     if (!probe.error && probe.status === 0) {
-      return execFileSync(command, [...prefixArgs, join(root, "scripts", script), ...args], {
-        encoding: "utf8",
-      });
+      return execFileSync(
+        command,
+        [...prefixArgs, join(root, "scripts", script), ...args],
+        {
+          encoding: "utf8",
+        },
+      );
     }
   }
 
-  throw new Error("No usable Python interpreter found for utility script tests");
+  throw new Error(
+    "No usable Python interpreter found for utility script tests",
+  );
 }
 
 describe("combine_exercise_outputs", () => {
