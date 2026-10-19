@@ -79,7 +79,7 @@ Settings → Branches → rule for `main` → **Require status checks to pass** 
    [{ "file": "src/routes/auth.ts", "title": "hardcoded", "reason": "test fixture, not a real secret" }]
    ```
    `title` is a case-insensitive substring of the finding title. The file is read from the base branch, so a PR cannot allowlist its own findings. Suppressed findings are listed in the scan summary. Protect the file with CODEOWNERS.
-3. **One PR, one-off:** a maintainer adds the `security-override` label, then clicks **Re-run failed jobs**. The gate reads labels live and passes with a warning. The scan job itself stays red, but only Security Gate is required.
+3. **One PR, one-off:** a maintainer adds the `security-override` label, then clicks **Re-run failed jobs**. The gate reads labels live and passes with a warning. The scan job itself stays red, but only Security Gate is required. The override only counts if the person who applied the label has **write, maintain or admin** permission and is **not the PR author**. The gate checks this through the API, so a triage-level or self-applied label is ignored. The warning in the log names who overrode it.
 
 ## 4. Troubleshooting
 

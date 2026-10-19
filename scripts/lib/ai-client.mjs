@@ -154,9 +154,38 @@ export async function askModel(args) {
 function parseJsonReply(text) {
   const unfenced = text.replace(/```(?:json)?/gi, "").trim();
   try {
-    return JSON.parse(unfenced);
+    return JSON.parse(unfenced); // normal case: the whole reply is the JSON object
   } catch {
-    return JSON.parse(unfenced.slice(unfenced.indexOf("{"), unfenced.lastIndexOf("}") + 1));
+    for (const obj of jsonObjects(unfenced)) {
+      if (Array.isArray(obj.findings) || typeof obj.summary === "string") return obj;
+    }
+    throw new Error("no JSON object with findings or summary");
+  }
+}
+
+/** Yields every balanced, parseable {...} block in text (string/escape aware), outermost first. */
+function* jsonObjects(text) {
+  for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+      } else if (c === '"') inString = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) {
+        try {
+          yield JSON.parse(text.slice(start, i + 1));
+        } catch {
+          // not valid JSON; try the next opening brace
+        }
+        break;
+      }
+    }
   }
 }
 

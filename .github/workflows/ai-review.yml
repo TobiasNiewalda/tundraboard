@@ -126,13 +126,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
           if [ "$RESULT" = "failure" ]; then
-            if grep -qx 'security-override' <<< "$labels"; then
-              echo "::warning::Critical finding overridden via 'security-override' label."
+            # The override only counts if the label is currently on the PR, was applied by
+            # someone with write access or higher, and that person is not the PR author.
+            has_label=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -cx 'security-override' || true)
+            actor=""
+            perm="none"
+            if [ "$has_label" -gt 0 ]; then
+              actor=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/events" \
+                --jq '.[] | select(.event=="labeled" and .label.name=="security-override") | .actor.login' | tail -n1)
+              [ -n "$actor" ] && perm=$(gh api "repos/$REPO/collaborators/$actor/permission" --jq '.permission' || echo none)
+            fi
+            case "$perm" in admin|maintain|write) authorised=true ;; *) authorised=false ;; esac
+            if [ "$authorised" = true ] && [ "$actor" != "$PR_AUTHOR" ]; then
+              echo "::warning::Critical finding overridden by @$actor ($perm) via 'security-override' label."
             else
-              echo "::error::Critical security finding(s). Fix them, or a maintainer may add the 'security-override' label and re-run."
+              echo "::error::Critical security finding(s). A maintainer other than the PR author may add the 'security-override' label and re-run failed jobs (label by '${actor:-nobody}', permission '$perm')."
               exit 1
             fi
           fi
