@@ -140,7 +140,27 @@ async function fetchWithRetry(url, init) {
  * Calls an OpenAI-compatible chat completions API (OpenRouter) and returns the parsed
  * JSON object the model replied with. Configured via AI_BASE_URL, AI_MODEL, AI_API_KEY.
  */
-export async function askModel({ system, diff }) {
+export async function askModel(args) {
+  try {
+    return await askOnce(args);
+  } catch (err) {
+    if (err.kind !== "bad_response" || !err.retryable) throw err;
+    console.log(`Unparseable model reply (${err.message}); retrying once.`);
+    return askOnce(args);
+  }
+}
+
+/** Extracts a JSON object from a model reply, tolerating code fences and surrounding prose. */
+function parseJsonReply(text) {
+  const unfenced = text.replace(/```(?:json)?/gi, "").trim();
+  try {
+    return JSON.parse(unfenced);
+  } catch {
+    return JSON.parse(unfenced.slice(unfenced.indexOf("{"), unfenced.lastIndexOf("}") + 1));
+  }
+}
+
+async function askOnce({ system, diff }) {
   const { AI_BASE_URL, AI_MODEL, AI_API_KEY } = process.env;
   if (!AI_BASE_URL || !AI_MODEL || !AI_API_KEY) {
     throw new AiError("config", "AI_BASE_URL, AI_MODEL and AI_API_KEY must be set.");
@@ -153,19 +173,37 @@ export async function askModel({ system, diff }) {
     },
     body: JSON.stringify({
       model: AI_MODEL,
-      max_tokens: 4096,
+      max_tokens: Number(process.env.AI_MAX_TOKENS) || 8192,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
         { role: "user", content: `<diff>\n${diff}\n</diff>` },
       ],
     }),
   });
+  const data = await res.json().catch(() => ({}));
+  const choice = data.choices?.[0];
+  const text = choice?.message?.content ?? "";
   try {
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content ?? "";
-    return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    return parseJsonReply(text);
   } catch {
-    throw new AiError("bad_response", "Model reply was not valid JSON.");
+    // Log enough to diagnose (truncation, empty content, prose) without dumping the whole reply.
+    const finish = choice?.finish_reason ?? "unknown";
+    console.log(
+      `Raw reply diagnostics: model=${data.model ?? AI_MODEL} finish_reason=${finish} ` +
+        `length=${text.length} error=${JSON.stringify(data.error ?? null)}\n` +
+        `Reply start: ${JSON.stringify(text.slice(0, 300))}\nReply end: ${JSON.stringify(text.slice(-200))}`,
+    );
+    const err = new AiError(
+      "bad_response",
+      finish === "length"
+        ? "Model reply was cut off at the token limit (raise AI_MAX_TOKENS)."
+        : text
+          ? "Model reply was not valid JSON."
+          : "Model returned an empty reply.",
+    );
+    err.retryable = finish !== "length"; // a retry would be cut off the same way
+    throw err;
   }
 }
 
