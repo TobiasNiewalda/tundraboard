@@ -1,0 +1,56 @@
+# Guardrails policy for browser-driving agent runs (Cline / Hermes via OpenRouter).
+# A "run" = one agent execution from launch to finish/stop. All counters reset per run.
+# Each block notes where the limit is really enforced vs. only requested of the model.
+
+# 1. Spend cap -- prevents a runaway loop from burning model credits.
+spend_cap:
+  eur_per_run: 3.00
+  enforcement: OpenRouter per-key credit limit (dedicated key per run/exercise); LiteLLM max_budget if a gateway is used
+  gap: Cline has no native cap; it only sees API errors once the key limit is hit
+
+# 2. Wall-clock timeout -- prevents a hung or endless run; hard kill, not a request.
+timeout:
+  seconds: 720            # ~3x a normal run
+  enforcement: run wrapper (`timeout 720 ...`) or container stop; not the model
+  gap: VS Code Cline extension has no per-task timeout; manual Cancel only
+
+# 3. Action budget -- prevents flailing/looping on the same click or typed text.
+action_budget:
+  max_actions: 50         # clicks + keystrokes; ~2-3x a supervised baseline run
+  count_keystrokes_per_character: false   # if true, raise budget to ~150-200
+  on_exceeded: pause_for_operator_approval
+  enforcement: Cline auto-approve "Maximum Requests" = 50 (approximates one browser action per request)
+  gap: counts API requests, not true clicks + keystrokes
+
+# 4. Domain restriction -- prevents the agent acting on or leaking data to anything but the dev app.
+domain_restriction:
+  allowed_origins:
+    - http://localhost:3000
+  default: deny
+  enforcement: >
+    Now: .clinerules instruction + hook that rejects browser navigation outside allowed_origins.
+    Later (sandbox): container whose only route out is a block-by-default proxy (squid/mitmproxy)
+    allowing localhost:3000 for the browser, plus a fresh browser profile per run.
+  gap: >
+    Without the proxy this is advisory/hook-level only; the agent or an injected page could navigate away.
+    The agent process itself must still reach the model endpoint (OpenRouter or a local gateway).
+    That egress is separate from the browser allowlist and should be pinned to that single host in the sandbox.
+
+# 5. Kill switch -- prevents an uninterruptible runaway agent.
+kill_switch:
+  file: ./KILL            # existence stops the run
+  env: AGENT_KILL         # "1" stops the run (only effective if set before launch or re-read by wrapper)
+  poll: every_step        # checked before each action
+  enforcement: run wrapper polls the file and kills the agent process tree; Cline hook can abort too
+  gap: a .clinerules instruction alone relies on the model obeying
+
+# 6. Human-in-the-loop gate -- prevents irreversible danger-zone actions without operator consent.
+hitl_gate:
+  require_confirmation:
+    - selector: "#danger-zone *"   # match by element, not coordinates
+    - navigation_to_paths: ["/danger*", "/reset*", "/delete*"]
+  approval_memory: none            # confirm every time
+  on_timeout: deny
+  timeout_seconds: 60
+  enforcement: Cline hook on browser actions; fallback is leaving browser auto-approve off (gates every action)
+  gap: without hooks, gating is all-or-nothing
