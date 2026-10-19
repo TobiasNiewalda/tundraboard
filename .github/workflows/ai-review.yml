@@ -1,0 +1,150 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# Deny everything by default; each job grants itself only what it needs.
+permissions: {}
+
+# A new push supersedes any in-flight review of the same PR.
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Configured under Settings → Secrets and variables → Actions → Variables.
+# AI_BASE_URL e.g. https://openrouter.ai/api/v1, AI_MODEL e.g. anthropic/claude-sonnet-4.5
+env:
+  AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+  AI_MODEL: ${{ vars.AI_MODEL }}
+
+jobs:
+  ai-review:
+    name: AI Code Review
+    # Fork PRs get no secrets; skip rather than fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # read code + diff
+      pull-requests: write # post review comments only
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false # agent cannot push
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Extract PR diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff "$BASE_SHA...$HEAD_SHA" -- . \
+            ':(exclude)package-lock.json' ':(exclude)*.snap' ':(exclude)docs' > diff.txt
+          echo "Diff size: $(wc -c < diff.txt) bytes"
+
+      # An AI outage must not block merging: failures degrade to a warning.
+      - name: Run AI review
+        continue-on-error: true
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ai-review.mjs
+
+  security-scan:
+    name: AI Security Scan
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # no write access of any kind
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Extract PR diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff "$BASE_SHA...$HEAD_SHA" -- . \
+            ':(exclude)package-lock.json' ':(exclude)*.snap' ':(exclude)docs' > diff.txt
+
+      # False-positive allowlist comes from the BASE branch, so a PR cannot allowlist
+      # its own findings. Changing it requires a separate, reviewed PR.
+      - name: Load allowlist from base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git show "$BASE_SHA:.github/ai-security-allowlist.json" > allowlist.json 2>/dev/null || echo '[]' > allowlist.json
+
+      # Exit 1 (critical finding) fails this job. Other errors (API outage) exit 2
+      # and are treated as "scan unavailable" so an outage does not block merges.
+      - name: Run AI security scan
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        run: |
+          set +e
+          node scripts/ai-security-scan.mjs
+          code=$?
+          if [ "$code" -eq 1 ]; then
+            exit 1
+          elif [ "$code" -ne 0 ]; then
+            echo "::warning::AI security scan unavailable (exit $code); not blocking. Review manually before merge."
+          fi
+
+  # Single stable check name to require in branch protection.
+  # A maintainer can bypass a false positive by adding the `security-override` label
+  # (restrict label permissions to maintainers), then choosing "Re-run failed jobs".
+  # Labels are read live from the API: a re-run reuses the original event payload,
+  # which would still show the old label list.
+  security-gate:
+    name: Security Gate
+    needs: security-scan
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      pull-requests: read # read current labels only
+    steps:
+      - name: Enforce result
+        env:
+          RESULT: ${{ needs.security-scan.result }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ "$RESULT" = "failure" ]; then
+            # The override only counts if the label is currently on the PR, was applied by
+            # someone with write access or higher, and that person is not the PR author.
+            has_label=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -cx 'security-override' || true)
+            actor=""
+            perm="none"
+            if [ "$has_label" -gt 0 ]; then
+              actor=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/events" \
+                --jq '.[] | select(.event=="labeled" and .label.name=="security-override") | .actor.login' | tail -n1)
+              [ -n "$actor" ] && perm=$(gh api "repos/$REPO/collaborators/$actor/permission" --jq '.permission' || echo none)
+            fi
+            case "$perm" in admin|maintain|write) authorised=true ;; *) authorised=false ;; esac
+            if [ "$authorised" = true ] && [ "$actor" != "$PR_AUTHOR" ]; then
+              echo "::warning::Critical finding overridden by @$actor ($perm) via 'security-override' label."
+            else
+              echo "::error::Critical security finding(s). A maintainer other than the PR author may add the 'security-override' label and re-run failed jobs (label by '${actor:-nobody}', permission '$perm')."
+              exit 1
+            fi
+          fi
+          echo "Security gate passed (scan result: $RESULT)."
