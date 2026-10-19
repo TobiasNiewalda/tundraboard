@@ -572,7 +572,7 @@ Don't make a personal access token. It would be longer-lived and broader than th
 ## AI_API_KEY
 A workspace key for my openrouter account was configured in the Github Repo settings as a secret.
 
-## AI_MODEL & AI_ASE URL
+## AI_MODEL & AI_BASE_URL
 Both variables are configurable and were added to the Github Repo settings as a variable.
 
 ## Permission: 
