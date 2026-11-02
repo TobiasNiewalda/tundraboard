@@ -180,10 +180,10 @@ describe("task characterisation", () => {
     });
 
     const response = await request(app).post("/tasks").send({
-      projectId: "00000000-0000-0000-0000-000000000010",
+      projectId: "00000000-0000-4000-8000-000000000010",
       title: "Draft lesson",
       description: "Write the first pass",
-      createdById: "00000000-0000-0000-0000-000000000011",
+      createdById: "00000000-0000-4000-8000-000000000011",
       estimatedHours: 4,
     });
 
@@ -293,9 +293,9 @@ describe("task characterisation", () => {
 
   it("rejects invalid estimated hours input", async () => {
     const response = await request(app).post("/tasks").send({
-      projectId: "00000000-0000-0000-0000-000000000010",
+      projectId: "00000000-0000-4000-8000-000000000010",
       title: "Draft lesson",
-      createdById: "00000000-0000-0000-0000-000000000011",
+      createdById: "00000000-0000-4000-8000-000000000011",
       estimatedHours: 0,
     });
 
