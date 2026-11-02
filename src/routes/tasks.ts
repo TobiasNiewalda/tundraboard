@@ -66,12 +66,10 @@ taskRouter.get("/", async (req, res) => {
 taskRouter.post("/", async (req, res) => {
   const parsedBody = taskCreateSchema.safeParse(req.body);
 
-    if (!parsedBody.success) {
-      res
-        .status(400)
-        .json({ error: JSON.stringify(parsedBody.error.issues) });
-      return;
-    }
+  if (!parsedBody.success) {
+    res.status(400).json({ error: JSON.stringify(parsedBody.error.issues) });
+    return;
+  }
 
   try {
     const task = await createTask(parsedBody.data);
@@ -84,12 +82,10 @@ taskRouter.post("/", async (req, res) => {
 taskRouter.patch("/:id", async (req, res) => {
   const parsedBody = taskUpdateSchema.safeParse(req.body);
 
-    if (!parsedBody.success) {
-      res
-        .status(400)
-        .json({ error: JSON.stringify(parsedBody.error.issues) });
-      return;
-    }
+  if (!parsedBody.success) {
+    res.status(400).json({ error: JSON.stringify(parsedBody.error.issues) });
+    return;
+  }
 
   try {
     const task = await updateTask(req.params.id, parsedBody.data);
