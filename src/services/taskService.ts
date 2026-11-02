@@ -1,4 +1,6 @@
 import { prisma } from "../utils/prisma.js";
+import { Prisma } from "@prisma/client";
+
 import { sendAssignmentEmail } from "./emailService.js";
 
 export interface TaskComment {
@@ -57,6 +59,7 @@ export interface CreateTaskInput {
 }
 
 export interface ListTasksInput {
+  q?: string;
   estimatedHours?: number;
   sortBy?: "createdAt" | "estimatedHours";
   sortOrder?: "asc" | "desc";
@@ -137,6 +140,30 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 }
 
 export async function listTasks(input: ListTasksInput = {}): Promise<Task[]> {
+  if (input.q) {
+    const { q } = input;
+    const tasks = await prisma.$queryRaw`
+      SELECT 
+        id, 
+        project_id AS "projectId", 
+        title, 
+        description, 
+        status, 
+        priority, 
+        assignee_id AS "assigneeId", 
+        created_by_id AS "createdById", 
+        due_date AS "dueDate", 
+        estimated_hours AS "estimatedHours", 
+        created_at AS "createdAt", 
+        updated_at AS "updatedAt"
+      FROM "tasks"
+      WHERE search_vector @@ websearch_to_tsquery('english', ${q})
+      ${input.estimatedHours !== undefined ? Prisma.sql`AND estimated_hours = ${input.estimatedHours}` : Prisma.empty}
+      ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', ${q})) DESC
+    `;
+    return tasks as Task[];
+  }
+
   return prisma.task.findMany({
     ...(input.estimatedHours !== undefined
       ? { where: { estimatedHours: input.estimatedHours } }

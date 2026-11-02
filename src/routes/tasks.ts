@@ -30,6 +30,7 @@ const taskUpdateSchema = taskCreateSchema
   .omit({ projectId: true, createdById: true });
 
 const taskListQuerySchema = z.object({
+  q: z.string().optional(),
   estimatedHours: z.coerce.number().int().positive().optional(),
   sortBy: z.enum(["createdAt", "estimatedHours"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
