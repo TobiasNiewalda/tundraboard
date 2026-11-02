@@ -14,6 +14,7 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     findMany: vi.fn(),
   },
+  $queryRaw: vi.fn(),
 }));
 
 const serviceMocks = vi.hoisted(() => ({
@@ -30,7 +31,43 @@ vi.mock("../src/services/emailService.js", () => ({
   sendAssignmentEmail: serviceMocks.sendAssignmentEmailMock,
 }));
 
-import { updateTask } from "../src/services/taskService.js";
+import { listTasks, updateTask } from "../src/services/taskService.js";
+
+describe("listTasks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("calls prisma.task.findMany when no search query is provided", async () => {
+    prismaMock.task.findMany.mockResolvedValue([{ id: "task-1" }]);
+
+    const result = await listTasks();
+
+    expect(result).toEqual([{ id: "task-1" }]);
+    expect(prismaMock.task.findMany).toHaveBeenCalled();
+  });
+
+  it("calls prisma.$queryRaw when search query is provided", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([{ id: "task-1" }]);
+
+    const result = await listTasks({ q: "search term" });
+
+    expect(result).toEqual([{ id: "task-1" }]);
+    expect(prismaMock.$queryRaw).toHaveBeenCalled();
+  });
+
+  it("includes estimatedHours in the raw query if provided", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+
+    await listTasks({ q: "search term", estimatedHours: 5 });
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalled();
+    const callArgs = prismaMock.$queryRaw.mock.calls[0];
+    const queryText = JSON.stringify(callArgs);
+    expect(queryText).toContain("estimated_hours =");
+    expect(queryText).toContain("5");
+  });
+});
 
 describe("updateTask", () => {
   beforeEach(() => {
