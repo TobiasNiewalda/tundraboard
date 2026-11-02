@@ -11,7 +11,7 @@ import {
 
 export const taskRouter = Router();
 
-const positiveHoursSchema = z.number().int().positive();
+const positiveHoursSchema = z.coerce.number().int().positive();
 
 const taskCreateSchema = z.object({
   projectId: z.string().uuid(),
@@ -66,12 +66,12 @@ taskRouter.get("/", async (req, res) => {
 taskRouter.post("/", async (req, res) => {
   const parsedBody = taskCreateSchema.safeParse(req.body);
 
-  if (!parsedBody.success) {
-    res
-      .status(400)
-      .json({ error: getValidationErrorMessage(parsedBody.error) });
-    return;
-  }
+    if (!parsedBody.success) {
+      res
+        .status(400)
+        .json({ error: JSON.stringify(parsedBody.error.issues) });
+      return;
+    }
 
   try {
     const task = await createTask(parsedBody.data);
@@ -84,12 +84,12 @@ taskRouter.post("/", async (req, res) => {
 taskRouter.patch("/:id", async (req, res) => {
   const parsedBody = taskUpdateSchema.safeParse(req.body);
 
-  if (!parsedBody.success) {
-    res
-      .status(400)
-      .json({ error: getValidationErrorMessage(parsedBody.error) });
-    return;
-  }
+    if (!parsedBody.success) {
+      res
+        .status(400)
+        .json({ error: JSON.stringify(parsedBody.error.issues) });
+      return;
+    }
 
   try {
     const task = await updateTask(req.params.id, parsedBody.data);
@@ -144,6 +144,6 @@ taskRouter.get("/:taskId/comments", async (req, res) => {
     const comments = await getCommentsByTaskId(req.params.taskId);
     res.json(comments);
   } catch {
-    res.status(500).json({ error: "failed to get comments" });
+    res.status(500).json({ error: "failed to create comment" });
   }
 });

@@ -61,16 +61,13 @@ describe("listTasks", () => {
 
     await listTasks({ q: "search term", estimatedHours: 5 });
 
-    expect(prismaMock.$queryRaw).toHaveBeenCalledWith(
-      expect.objectContaining({
-        // Since it's a template literal, Prisma passes a tagged template object.
-        // Testing the exact call of $queryRaw is tricky, but we can check it was called.
-      }),
-    );
+    expect(prismaMock.$queryRaw).toHaveBeenCalled();
+    const callArgs = prismaMock.$queryRaw.mock.calls[0];
+    const queryText = JSON.stringify(callArgs);
+    expect(queryText).toContain("estimated_hours =");
+    expect(queryText).toContain("5");
   });
 });
-
-
 
 describe("updateTask", () => {
   beforeEach(() => {
