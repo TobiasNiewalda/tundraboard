@@ -4,7 +4,9 @@
 import {
   AiError,
   askChunks,
+  commentKey,
   commentableLines,
+  existingReviewCommentKeys,
   github,
   readDiff,
   INJECTION_GUARD,
@@ -89,17 +91,40 @@ async function main() {
     }
   }
 
+  // Deduplication: drop inline findings a previous push already posted with the same
+  // normalised text on the same file, so repeated pushes stop piling up identical
+  // comments. A changed suggestion (different wording, severity or category) produces a
+  // new key and is still posted; a finding that merely shifted line numbers is not.
+  let alreadyReported = 0;
+  if (inline.length) {
+    try {
+      const seen = await existingReviewCommentKeys(process.env.PR_NUMBER);
+      const fresh = inline.filter((c) => !seen.has(commentKey(c.path, c.body)));
+      alreadyReported = inline.length - fresh.length;
+      inline.splice(0, inline.length, ...fresh);
+    } catch (err) {
+      // Best-effort: duplicates are preferable to losing the whole review.
+      console.log(`::warning title=Deduplication skipped::${err.message}`);
+    }
+  }
+
   const body = [
     "### 🤖 AI code review (advisory)",
     summary,
     findings.length ? "" : "No issues found.",
     general.length ? `\n**Other findings**\n${general.join("\n")}` : "",
     coverage.length ? `\n> ⚠️ **Partial review:** ${coverage.join(" ")}` : "",
+    alreadyReported
+      ? `\n_${alreadyReported} finding(s) already reported on a previous push (see earlier comments) are not repeated here._`
+      : "",
     FOOTER,
   ].join("\n");
 
   await postReview(body, inline);
-  console.log(`Posted review: ${inline.length} inline, ${general.length} general findings.`);
+  console.log(
+    `Posted review: ${inline.length} inline, ${general.length} general, ` +
+      `${alreadyReported} duplicate(s) already reported on a previous push.`,
+  );
 }
 
 try {
