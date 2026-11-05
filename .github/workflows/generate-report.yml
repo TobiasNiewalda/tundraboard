@@ -1,0 +1,116 @@
+name: AI Impact Report
+
+# On-demand quarterly report. Numbers come from metrics/*.csv and the
+# OpenRouter usage API via scripts/generate-fact-sheet.mjs; scripts/
+# generate-impact-report.mjs sends that fact sheet to the model with the
+# Anti-Fluff prompt and commits docs/reports/AI-Impact-Report-latest.md.
+# Trigger: Actions → AI Impact Report → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "OpenRouter model override (default: vars.AI_IMPACT_MODEL, vars.AI_MODEL or google/gemma-4-31b-it)"
+        required: false
+        type: string
+
+# Deny everything by default; the job grants itself only what it needs.
+permissions: {}
+
+# One report at a time: two runs would race to overwrite/commit the same file.
+concurrency:
+  group: ai-impact-report
+  cancel-in-progress: false
+
+env:
+  # Same AI_* configuration as the PR review workflow (docs/ai-review-setup.md).
+  # The report pins a cheap instruct model by default (plain OpenRouter id;
+  # the API rejects the harness-style "openrouter/" prefix) so the quarterly
+  # run does not silently spend against whatever AI_MODEL points at.
+  AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://openrouter.ai/api/v1' }}
+  AI_MODEL: ${{ inputs.model || vars.AI_IMPACT_MODEL || vars.AI_MODEL || 'google/gemma-4-31b-it' }}
+
+jobs:
+  generate-report:
+    name: Generate AI Impact Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # commit docs/reports/AI-Impact-Report-latest.md to main
+    env:
+      # Either existing key works for the model call; the fact sheet reuses it
+      # for spend data, so no new secret is strictly required.
+      AI_API_KEY: ${{ secrets.AI_API_KEY || secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.AI_API_KEY }}
+      REPORT: docs/reports/AI-Impact-Report-latest.md
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main # report always commits onto the current tip of main
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+      # No `npm ci` on purpose: both scripts are plain Node. The only runtime
+      # dependency (dotenv, in fetch_ai_usage.js) is optional and CI injects
+      # the env vars directly.
+
+      - name: Build fact sheet (CSV trends + OpenRouter usage)
+        run: node scripts/generate-fact-sheet.mjs > fact-sheet.json
+
+      - name: Show fact sheet in run summary
+        run: |
+          {
+            echo "### Hard Facts sent to the model"
+            echo ""
+            echo '```json'
+            cat fact-sheet.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Exit 2 (AI config missing/rejected) fails the run — better a failed
+      # dispatch than a committed report without analysis. Model outages
+      # (timeout/rate_limit/outage) degrade inside the script to a
+      # facts-only report plus a ::warning::, and the run proceeds.
+      - name: Call model and write report
+        run: node scripts/generate-impact-report.mjs fact-sheet.json
+
+      - name: Commit and push report
+        run: |
+          set -euo pipefail
+          # git diff alone misses a brand-new (untracked) report, so ask status.
+          if [ -z "$(git status --porcelain -- "$REPORT")" ]; then
+            echo "::notice::Report identical to the one on main; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Keep a copy of the fresh report outside the worktree so a rejected
+          # push can replay it onto the newest main.
+          cp "$REPORT" report-fresh.md
+          commit_and_push() {
+            git add "$REPORT"
+            if git diff --cached --quiet; then
+              echo "No pending changes; nothing to push."
+              return 0
+            fi
+            # [skip ci]: the report commit must not burn another CI run.
+            git commit -m "docs(reports): refresh AI Impact Report [skip ci]"
+            git push origin "HEAD:main" && echo "Pushed."
+          }
+
+          if commit_and_push; then exit 0; fi
+
+          for attempt in 2 3; do
+            echo "::warning::Push rejected; re-syncing with main (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            mv report-fresh.md "$REPORT"
+            if commit_and_push; then exit 0; fi
+          done
+
+          echo "::error::Could not push the report after 3 attempts."
+          exit 1
+        # If branch protection on main does not let the Actions bot push, this
+        # is the step that fails; see docs/metrics-setup.md for the setting.
