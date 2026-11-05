@@ -26,8 +26,14 @@ env:
   # The report pins a cheap instruct model by default (plain OpenRouter id;
   # the API rejects the harness-style "openrouter/" prefix) so the quarterly
   # run does not silently spend against whatever AI_MODEL points at.
+  #
+  # SECURITY: AI_MODEL is deliberately NOT set here. The workflow_dispatch
+  # `model` input is attacker-controlled; injecting it into a workflow-level
+  # env var would expose every step/script to shell (script) injection.
+  # Instead the "Validate model input" step below resolves the fallback
+  # chain, allowlists the result, and exports only the sanitized value via
+  # $GITHUB_ENV.
   AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://openrouter.ai/api/v1' }}
-  AI_MODEL: ${{ inputs.model || vars.AI_IMPACT_MODEL || vars.AI_MODEL || 'google/gemma-4-31b-it' }}
 
 jobs:
   generate-report:
@@ -54,6 +60,36 @@ jobs:
       # No `npm ci` on purpose: both scripts are plain Node. The only runtime
       # dependency (dotenv, in fetch_ai_usage.js) is optional and CI injects
       # the env vars directly.
+
+      # Fail-fast gate against command/script injection via the `model` input.
+      # The raw value reaches bash only through `env:` — GitHub assigns env
+      # values literally, the shell never parses them — so the attacker string
+      # is data here, never a command line. The resolved model (input ->
+      # vars.AI_IMPACT_MODEL -> vars.AI_MODEL -> pinned default) must match a
+      # strict allowlist of characters that appear in real OpenRouter ids
+      # (letters, digits, '/', '.', '-', '_'); quotes, semicolons, spaces,
+      # backticks, newlines etc. abort the run before any AI script executes.
+      # '.' is included because ids like "anthropic/claude-sonnet-4.5" are
+      # legitimate; it is not a shell or expression metacharacter.
+      # Only the validated string is exported, so later steps and the Node
+      # scripts can consume AI_MODEL purely as data.
+      - name: Validate model input (allowlist)
+        shell: bash
+        env:
+          INPUT_MODEL: ${{ inputs.model }}
+          VAR_IMPACT_MODEL: ${{ vars.AI_IMPACT_MODEL }}
+          VAR_MODEL: ${{ vars.AI_MODEL }}
+        run: |
+          set -euo pipefail
+          model="${INPUT_MODEL:-${VAR_IMPACT_MODEL:-${VAR_MODEL:-google/gemma-4-31b-it}}}"
+          if [[ ! "$model" =~ ^[A-Za-z0-9._/-]{1,200}$ ]]; then
+            # %q escapes control chars/whitespace so a hostile value cannot
+            # forge extra ::error::/::warning:: log annotations via the echo.
+            printf '::error::Invalid model name %q - only [A-Za-z0-9._/-] (max 200 chars) are allowed; refusing to run.\n' "$model"
+            exit 1
+          fi
+          echo "AI_MODEL=$model" >> "$GITHUB_ENV"
+          echo "Using model: $model"
 
       - name: Build fact sheet (CSV trends + OpenRouter usage)
         run: node scripts/generate-fact-sheet.mjs > fact-sheet.json
