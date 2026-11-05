@@ -89,6 +89,11 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          
+          # DEBUG: Test if the token can actually see the PR
+          echo "Debugging PR visibility..."
+          gh pr view $PR_NUMBER || echo "DEBUG: gh pr view failed"
+
           MARKER='<!-- coverage-report -->'
           BODY_FILE=$(mktemp)
           {
@@ -100,7 +105,7 @@ jobs:
             echo ""
             echo "$MARKER"
           } > "$BODY_FILE"
-
+          
           # Upsert: update the previous bot comment instead of stacking one
           # per push to the PR.
           comment_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
