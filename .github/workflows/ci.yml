@@ -63,6 +63,13 @@ jobs:
   test:
     needs: format
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # upsert the coverage comment on PR runs
+    env:
+      REPO: ${{ github.repository }}
+      # scripts/lib/ai-client.mjs reads GITHUB_TOKEN (not GH_TOKEN).
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -73,3 +80,14 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run test:coverage
+
+      - name: Coverage → job summary
+        run: node scripts/coverage-summary.mjs markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage → PR comment
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # Upsert logic lives in Node (stable) instead of bash/gh (see the
+        # file header for what PR_NUMBER/GITHUB_TOKEN/REPO drive).
+        run: node scripts/metrics-coverage.mjs

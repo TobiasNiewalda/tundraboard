@@ -1,0 +1,127 @@
+name: Cycle Time Metrics
+
+# Measures how long merged PRs took: first commit -> merge.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+# Deny everything by default; the job grants itself only what it needs.
+permissions: {}
+
+# Serialise CSV appends: two merges landing together would otherwise race on
+# the same file. Never cancel — a cancelled run would lose a data point.
+concurrency:
+  group: cycle-time-metrics
+  cancel-in-progress: false
+
+jobs:
+  record-cycle-time:
+    name: Record cycle time
+    # A PR closed without merging has no cycle time to measure.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # append metrics/cycle_time.csv and push to main
+      pull-requests: read # read the PR's commit list via `gh api`
+    env:
+      CSV: metrics/cycle_time.csv
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      MERGED_AT: ${{ github.event.pull_request.merged_at }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Append onto the current tip of main (the merge commit is already there),
+          # not onto the PR merge ref; one commit of history is enough.
+          ref: main
+          fetch-depth: 1
+
+      - name: Compute and append row
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$CSV")"
+          [ -f "$CSV" ] || echo 'pr_number,date,duration_days' > "$CSV"
+
+          if grep -q "^${PR_NUMBER}," "$CSV"; then
+            echo "::notice::PR #${PR_NUMBER} is already recorded; nothing to do."
+            exit 0
+          fi
+
+          merge_epoch=$(date -u -d "$MERGED_AT" +%s)
+
+          # Cycle time starts at the PR's earliest commit. Prefer author dates:
+          # a rebase rewrites committer dates but author dates still point at
+          # when the work actually began. Dates may carry mixed UTC offsets,
+          # so normalise each to an epoch before taking the minimum.
+          first_epoch=$(gh api "repos/$REPO/pulls/$PR_NUMBER/commits" --paginate \
+            --jq '.[] | .commit.author.date // .commit.committer.date' |
+            { while IFS= read -r d; do date -u -d "$d" +%s; done; } |
+            sort -n | head -n 1)
+
+          if [ -z "${first_epoch:-}" ]; then
+            echo "::warning::No commits returned for PR #${PR_NUMBER}; recording 0 days."
+            first_epoch=$merge_epoch
+          elif [ "$first_epoch" -gt "$merge_epoch" ]; then
+            echo "::warning::First commit ($first_epoch) is after the merge ($merge_epoch); clamping to 0."
+            first_epoch=$merge_epoch
+          fi
+
+          duration_days=$(awk -v m="$merge_epoch" -v f="$first_epoch" \
+            'BEGIN { printf "%.2f", (m - f) / 86400 }')
+          merge_date=$(date -u -d "$MERGED_AT" +%Y-%m-%d)
+          row="${PR_NUMBER},${merge_date},${duration_days}"
+
+          echo "$row" >> "$CSV"
+          # Hand the exact row to the push step so it can re-append after a re-sync.
+          echo "ROW=$row" >> "$GITHUB_ENV"
+
+          {
+            echo "### Cycle time — PR #${PR_NUMBER}"
+            echo ""
+            echo "- Merged at: $MERGED_AT"
+            echo "- Cycle time (first commit -> merge): **${duration_days} days**"
+            echo "- Logged in \`$CSV\` as \`$row\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Recorded: $row"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          commit_and_push() {
+            git add "$CSV"
+            if git diff --cached --quiet; then
+              echo "No pending row (already recorded); nothing to push."
+              return 0
+            fi
+            # [skip ci]: the metrics commit must not burn another CI run.
+            git commit -m "chore(metrics): record cycle time for PR #${PR_NUMBER} [skip ci]"
+            git push origin "HEAD:main" && echo "Pushed."
+          }
+
+          if commit_and_push; then exit 0; fi
+
+          # Another push to main landed first: drop our commit, re-base the row on
+          # the newest main and try again. Safe because the CSV is append-only.
+          for attempt in 2 3; do
+            echo "::warning::Push rejected; re-syncing with main (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            if grep -q "^${PR_NUMBER}," "$CSV"; then
+              echo "::notice::PR #${PR_NUMBER} was recorded by a concurrent run."
+              exit 0
+            fi
+            [ -f "$CSV" ] || echo 'pr_number,date,duration_days' > "$CSV"
+            echo "$ROW" >> "$CSV"
+            if commit_and_push; then exit 0; fi
+          done
+
+          echo "::error::Could not push the cycle time row after 3 attempts."
+          exit 1
+        # If branch protection on main does not let the Actions bot push, this
+        # is the step that fails; see docs/metrics-setup.md for the setting.

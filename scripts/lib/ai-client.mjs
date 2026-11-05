@@ -236,24 +236,95 @@ async function askOnce({ system, diff }) {
   }
 }
 
-/** POST to the GitHub REST API for the current repo. Errors carry `.status`. */
-export async function github(path, body) {
-  const res = await fetch(`https://api.github.com/repos/${process.env.REPO}${path}`, {
-    method: "POST",
+/**
+ * One GitHub REST call for the current repo (REPO env, GITHUB_TOKEN auth).
+ * `body` omitted → no request body (GET). Errors carry `.status` and a hint
+ * for the two failure modes CI keeps hitting: 404 (bad repo/PR coordinates)
+ * and 403/401 (token permissions).
+ */
+export async function githubRequest(method, path, body) {
+  const { REPO, GITHUB_TOKEN } = process.env;
+  if (!REPO) throw new Error("GitHub API: REPO env var (owner/name) is not set.");
+  if (!GITHUB_TOKEN)
+    throw new Error("GitHub API: GITHUB_TOKEN env var is not set (map secrets.GITHUB_TOKEN into the step).");
+  const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
+    method,
     signal: AbortSignal.timeout(30_000),
     headers: {
-      authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      authorization: `Bearer ${GITHUB_TOKEN}`,
       accept: "application/vnd.github+json",
-      "content-type": "application/json",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = new Error(`GitHub API returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const hint =
+      res.status === 404
+        ? " — 404 on a valid repo usually means an empty/invalid PR_NUMBER in the path"
+        : res.status === 403 || res.status === 401
+          ? " — token lacks permission; check the job's `pull-requests:` scope and GITHUB_TOKEN"
+          : "";
+    const err = new Error(`GitHub API ${method} ${path} returned ${res.status}: ${(await res.text()).slice(0, 300)}${hint}`);
     err.status = res.status;
     throw err;
   }
+  if (res.status === 204) return null;
   return res.json();
+}
+
+/** POST to the GitHub REST API for the current repo. Errors carry `.status`. */
+export function github(path, body) {
+  return githubRequest("POST", path, body);
+}
+
+/** GET a list endpoint and return all items, following pages of 100 (capped). */
+export async function githubList(path, { maxPages = 10 } = {}) {
+  const sep = path.includes("?") ? "&" : "?";
+  const items = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await githubRequest("GET", `${path}${sep}per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) {
+      throw new Error(`GitHub API GET ${path} returned an object, not a list.`);
+    }
+    items.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return items;
+}
+
+/**
+ * Stable fingerprint of a review comment body for duplicate detection: lowercased,
+ * with every run of non-alphanumerics (whitespace, markdown, punctuation) collapsed to
+ * a single space. Re-formatting the same sentence yields the same fingerprint; a
+ * different suggestion almost never collides, so we suppress repeats without ever
+ * silently dropping a genuinely new finding.
+ */
+export function commentFingerprint(body) {
+  return String(body).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Dedup key for an inline review comment: the file it annotates plus its normalised text. */
+export function commentKey(path, body) {
+  return `${String(path).replace(/^\.?\//, "")}|${commentFingerprint(body)}`;
+}
+
+/**
+ * Keys of all inline review comments already posted on the PR, for deduplication
+ * across pushes (`GET /pulls/{n}/comments`, paginated by githubList up to 1,000).
+ * Only bot-authored comments count, so a human remark can never silence an AI finding.
+ * The matching ignores the line number: a finding that merely shifted position in the
+ * diff is still the same finding, while a changed suggestion produces a new key and is
+ * posted again.
+ */
+export async function existingReviewCommentKeys(prNumber) {
+  const comments = await githubList(`/pulls/${prNumber}/comments`);
+  const keys = new Set();
+  for (const c of comments) {
+    const isBot = c?.user?.type === "Bot" || /\[bot]$/.test(c?.user?.login ?? "");
+    if (!isBot || typeof c.path !== "string" || typeof c.body !== "string") continue;
+    keys.add(commentKey(c.path, c.body));
+  }
+  return keys;
 }
 
 export const INJECTION_GUARD =
