@@ -63,6 +63,12 @@ jobs:
   test:
     needs: format
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # upsert the coverage comment on PR runs
+    env:
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -73,3 +79,37 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run test:coverage
+
+      - name: Coverage → job summary
+        run: node scripts/coverage-summary.mjs markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage → PR comment
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- coverage-report -->'
+          BODY_FILE=$(mktemp)
+          {
+            node scripts/coverage-summary.mjs \
+              markdown --heading "Test coverage @ ${GITHUB_SHA:0:7}"
+            echo ""
+            echo "_From \`npm run test:coverage\` (thresholds in \`vitest.config.ts\`). "
+            echo "Merged commits are also logged to \`metrics/coverage.csv\`._"
+            echo ""
+            echo "$MARKER"
+          } > "$BODY_FILE"
+
+          # Upsert: update the previous bot comment instead of stacking one
+          # per push to the PR.
+          comment_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq "[.[] | select(.body | contains(\"$MARKER\"))] | last | .id // empty")
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$comment_id" -F body=@$BODY_FILE \
+              --jq '.html_url' | xargs -I{} echo "Updated comment: {}"
+          else
+            gh api -X POST "repos/$REPO/issues/comments" \
+              -F issue_number="$PR_NUMBER" -F body=@$BODY_FILE \
+              --jq '.html_url' | xargs -I{} echo "Created comment: {}"
+          fi

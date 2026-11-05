@@ -1,0 +1,127 @@
+name: Coverage Metrics
+
+# Records the coverage totals of every commit that lands on main (merges, and
+# direct pushes) into metrics/coverage.csv — the "Test Coverage" gauge of
+# docs/course_materials/Chapter 5/Lesson 2/analysis.md (baseline 40%, target
+# 70%, alert on a >5 pp drop in a single merge).
+#
+# Re-runs `npm run test:coverage` against the pushed commit rather than
+# fetching artifacts from the CI workflow: the gate (ci.yml) and the recorder
+# stay independent, matching the metrics-cycle-time.yml pattern.
+on:
+  push:
+    branches: [main]
+
+# Deny everything by default; the job grants itself only what it needs.
+permissions: {}
+
+# Serialise CSV appends: two merges landing together would otherwise race on
+# the same file. Never cancel — a cancelled run would lose a data point.
+concurrency:
+  group: coverage-metrics
+  cancel-in-progress: false
+
+jobs:
+  record-coverage:
+    name: Record coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # append metrics/coverage.csv and push to main
+    env:
+      CSV: metrics/coverage.csv
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Measure the commit that triggered this run; one commit of history
+          # is enough (the CSV rides along in the same tree).
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run test:coverage
+
+      - name: Compute and append row
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$CSV")"
+          [ -f "$CSV" ] || echo 'date,commit,lines,functions,branches,statements' > "$CSV"
+
+          if grep -q ",${GITHUB_SHA}," "$CSV"; then
+            echo "::notice::Commit ${GITHUB_SHA:0:7} is already recorded; nothing to do."
+            exit 0
+          fi
+
+          # Alert threshold from analysis.md: a >5 pp lines-coverage drop in a
+          # single merge must raise a flag, so compare against the previous row.
+          prev_lines=$(tail -n +2 "$CSV" | tail -n 1 | cut -d, -f3 || true)
+          cur_lines=$(node scripts/coverage-summary.mjs pct lines)
+
+          regression=""
+          if [ -n "$prev_lines" ]; then
+            drop=$(awk -v p="$prev_lines" -v c="$cur_lines" 'BEGIN { printf "%.2f", p - c }')
+            if awk -v d="$drop" 'BEGIN { exit !(d > 5) }'; then
+              regression="**ALERT: dropped ${drop} pp vs previous commit (> 5 pp threshold)**"
+              echo "::warning::Lines coverage dropped ${drop} pp (${prev_lines}% -> ${cur_lines}%) — investigate per analysis.md."
+            fi
+          fi
+
+          row=$(node scripts/coverage-summary.mjs csv-row "$(date -u +%Y-%m-%d)" "$GITHUB_SHA")
+          echo "$row" >> "$CSV"
+          # Hand the exact row to the push step so it can re-append after a re-sync.
+          echo "ROW=$row" >> "$GITHUB_ENV"
+
+          {
+            node scripts/coverage-summary.mjs \
+              markdown --heading "Coverage — ${GITHUB_SHA:0:7}"
+            echo ""
+            [ -n "$regression" ] && echo "$regression" && echo ""
+            echo "Logged in \`$CSV\` as \`$row\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Recorded: $row"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          commit_and_push() {
+            git add "$CSV"
+            if git diff --cached --quiet; then
+              echo "No pending row (already recorded); nothing to push."
+              return 0
+            fi
+            # [skip ci]: the metrics commit must not burn another CI run.
+            git commit -m "chore(metrics): record coverage for ${GITHUB_SHA:0:7} [skip ci]"
+            git push origin "HEAD:main" && echo "Pushed."
+          }
+
+          if commit_and_push; then exit 0; fi
+
+          # Another push to main landed first: drop our commit, re-base the row on
+          # the newest main and try again. Safe because the CSV is append-only.
+          for attempt in 2 3; do
+            echo "::warning::Push rejected; re-syncing with main (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            if grep -q ",${GITHUB_SHA}," "$CSV"; then
+              echo "::notice::${GITHUB_SHA:0:7} was recorded by a concurrent run."
+              exit 0
+            fi
+            [ -f "$CSV" ] || echo 'date,commit,lines,functions,branches,statements' > "$CSV"
+            echo "$ROW" >> "$CSV"
+            if commit_and_push; then exit 0; fi
+          done
+
+          echo "::error::Could not push the coverage row after 3 attempts."
+          exit 1
+        # If branch protection on main does not let the Actions bot push, this
+        # is the step that fails; see docs/metrics-setup.md for the setting.
