@@ -160,10 +160,17 @@ const sum = (rows, name) => rows.reduce((acc, r) => acc + (Number(r[name]) || 0)
 /** Number formatter appropriate for the given metric name. */
 const fmtFor = (metric) => (isCost(metric) ? usd : isTokens(metric) ? tokens : int);
 
-async function main() {
+/**
+ * Collects the current UTC month's facts and returns them structured (no
+ * rendering) so other scripts can reuse them — see generate-fact-sheet.mjs.
+ * Errors carry `exitCode` (2 config, 1 API) for main() to translate.
+ */
+async function collectFacts() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    fail(2, "OPENROUTER_API_KEY is not set. Add it to .env or export it (see docs/metrics-setup.md).");
+    const err = new Error("OPENROUTER_API_KEY is not set. Add it to .env or export it (see docs/metrics-setup.md).");
+    err.exitCode = 2;
+    throw err;
   }
   const analyticsToken = process.env.OPENROUTER_MANAGEMENT_KEY || apiKey;
 
@@ -178,7 +185,11 @@ async function main() {
   try {
     keyInfo = (await api("/key", { token: apiKey })).data || {};
   } catch (err) {
-    fail(1, err.auth ? `OPENROUTER_API_KEY was rejected: ${err.message}` : `Could not reach OpenRouter: ${err.message}`);
+    const wrapped = new Error(
+      err.auth ? `OPENROUTER_API_KEY was rejected: ${err.message}` : `Could not reach OpenRouter: ${err.message}`,
+    );
+    wrapped.exitCode = 1;
+    throw wrapped;
   }
 
   const totals = {};
@@ -232,6 +243,32 @@ async function main() {
     spendSource = "Spend is this key's monthly usage (UTC month).";
   }
 
+  // Account-level context lines.
+  const facts = [];
+  if (!analyticsNote) {
+    try {
+      const credits = (await api("/credits", { token: analyticsToken })).data || {};
+      if (typeof credits.total_credits === "number") {
+        facts.push(
+          `Account credit balance: ${usd(credits.total_credits - (credits.total_usage || 0))} ` +
+            `remaining of ${usd(credits.total_credits)} purchased.`,
+        );
+      }
+    } catch {
+      // Context only; a 403 here just omits the balance line.
+    }
+  }
+  if (keyInfo.limit != null) {
+    const reset = keyInfo.limit_reset ? `, resets ${keyInfo.limit_reset}` : "";
+    facts.push(`Key spend limit: ${usd(keyInfo.limit)}${reset}; ${usd(keyInfo.limit_remaining ?? 0)} remaining.`);
+  }
+
+  return { now, month, keyInfo, names, totals, spendSource, analyticsNote, topModels, facts };
+}
+
+/** Renders the collectFacts() result as the Markdown snippet for analysis.md. */
+function renderSnippet(f) {
+  const { month, names, totals, spendSource, analyticsNote, topModels, facts } = f;
   const lines = ["## AI Tool Spend/Usage", "", "| Metric | This month |", "| --- | ---: |"];
   for (const name of names) {
     if (name === "__totalTokens" || totals[name] === undefined) continue;
@@ -255,29 +292,24 @@ async function main() {
     }
   }
 
-  // Account-level context lines.
-  const facts = [];
-  if (!analyticsNote) {
-    try {
-      const credits = (await api("/credits", { token: analyticsToken })).data || {};
-      if (typeof credits.total_credits === "number") {
-        facts.push(
-          `Account credit balance: ${usd(credits.total_credits - (credits.total_usage || 0))} ` +
-            `remaining of ${usd(credits.total_credits)} purchased.`,
-        );
-      }
-    } catch {
-      // Context only; a 403 here just omits the balance line.
-    }
-  }
-  if (keyInfo.limit != null) {
-    const reset = keyInfo.limit_reset ? `, resets ${keyInfo.limit_reset}` : "";
-    facts.push(`Key spend limit: ${usd(keyInfo.limit)}${reset}; ${usd(keyInfo.limit_remaining ?? 0)} remaining.`);
-  }
-  if (facts.length) lines.push("", ...facts.map((f) => `- ${f}`));
+  if (facts.length) lines.push("", ...facts.map((line) => `- ${line}`));
 
-  lines.push("", `<!-- Generated ${now.toISOString()} by scripts/fetch_ai_usage.js (month ${month} UTC) -->`, "");
-  process.stdout.write(lines.join("\n"));
+  lines.push("", `<!-- Generated ${f.now.toISOString()} by scripts/fetch_ai_usage.js (month ${month} UTC) -->`, "");
+  return lines;
 }
 
-main().catch((err) => fail(1, `Could not fetch OpenRouter usage: ${err.message}`));
+async function main() {
+  try {
+    process.stdout.write(renderSnippet(await collectFacts()).join("\n"));
+  } catch (err) {
+    const msg = err.exitCode === 2 ? err.message : `Could not fetch OpenRouter usage: ${err.message}`;
+    fail(err.exitCode || 1, msg);
+  }
+}
+
+// Only print the snippet when invoked directly; generate-fact-sheet.mjs imports collectFacts.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { collectFacts };

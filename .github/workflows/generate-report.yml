@@ -1,0 +1,152 @@
+name: AI Impact Report
+
+# On-demand quarterly report. Numbers come from metrics/*.csv and the
+# OpenRouter usage API via scripts/generate-fact-sheet.mjs; scripts/
+# generate-impact-report.mjs sends that fact sheet to the model with the
+# Anti-Fluff prompt and commits docs/reports/AI-Impact-Report-latest.md.
+# Trigger: Actions → AI Impact Report → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "OpenRouter model override (default: vars.AI_IMPACT_MODEL, vars.AI_MODEL or google/gemma-4-31b-it)"
+        required: false
+        type: string
+
+# Deny everything by default; the job grants itself only what it needs.
+permissions: {}
+
+# One report at a time: two runs would race to overwrite/commit the same file.
+concurrency:
+  group: ai-impact-report
+  cancel-in-progress: false
+
+env:
+  # Same AI_* configuration as the PR review workflow (docs/ai-review-setup.md).
+  # The report pins a cheap instruct model by default (plain OpenRouter id;
+  # the API rejects the harness-style "openrouter/" prefix) so the quarterly
+  # run does not silently spend against whatever AI_MODEL points at.
+  #
+  # SECURITY: AI_MODEL is deliberately NOT set here. The workflow_dispatch
+  # `model` input is attacker-controlled; injecting it into a workflow-level
+  # env var would expose every step/script to shell (script) injection.
+  # Instead the "Validate model input" step below resolves the fallback
+  # chain, allowlists the result, and exports only the sanitized value via
+  # $GITHUB_ENV.
+  AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://openrouter.ai/api/v1' }}
+
+jobs:
+  generate-report:
+    name: Generate AI Impact Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # commit docs/reports/AI-Impact-Report-latest.md to main
+    env:
+      # Either existing key works for the model call; the fact sheet reuses it
+      # for spend data, so no new secret is strictly required.
+      AI_API_KEY: ${{ secrets.AI_API_KEY || secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.AI_API_KEY }}
+      REPORT: docs/reports/AI-Impact-Report-latest.md
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main # report always commits onto the current tip of main
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+      # No `npm ci` on purpose: both scripts are plain Node. The only runtime
+      # dependency (dotenv, in fetch_ai_usage.js) is optional and CI injects
+      # the env vars directly.
+
+      # Fail-fast gate against command/script injection via the `model` input.
+      # The raw value reaches bash only through `env:` — GitHub assigns env
+      # values literally, the shell never parses them — so the attacker string
+      # is data here, never a command line. The resolved model (input ->
+      # vars.AI_IMPACT_MODEL -> vars.AI_MODEL -> pinned default) must match a
+      # strict allowlist of characters that appear in real OpenRouter ids
+      # (letters, digits, '/', '.', '-', '_'); quotes, semicolons, spaces,
+      # backticks, newlines etc. abort the run before any AI script executes.
+      # '.' is included because ids like "anthropic/claude-sonnet-4.5" are
+      # legitimate; it is not a shell or expression metacharacter.
+      # Only the validated string is exported, so later steps and the Node
+      # scripts can consume AI_MODEL purely as data.
+      - name: Validate model input (allowlist)
+        shell: bash
+        env:
+          INPUT_MODEL: ${{ inputs.model }}
+          VAR_IMPACT_MODEL: ${{ vars.AI_IMPACT_MODEL }}
+          VAR_MODEL: ${{ vars.AI_MODEL }}
+        run: |
+          set -euo pipefail
+          model="${INPUT_MODEL:-${VAR_IMPACT_MODEL:-${VAR_MODEL:-google/gemma-4-31b-it}}}"
+          if [[ ! "$model" =~ ^[A-Za-z0-9._/-]{1,200}$ ]]; then
+            # %q escapes control chars/whitespace so a hostile value cannot
+            # forge extra ::error::/::warning:: log annotations via the echo.
+            printf '::error::Invalid model name %q - only [A-Za-z0-9._/-] (max 200 chars) are allowed; refusing to run.\n' "$model"
+            exit 1
+          fi
+          echo "AI_MODEL=$model" >> "$GITHUB_ENV"
+          echo "Using model: $model"
+
+      - name: Build fact sheet (CSV trends + OpenRouter usage)
+        run: node scripts/generate-fact-sheet.mjs > fact-sheet.json
+
+      - name: Show fact sheet in run summary
+        run: |
+          {
+            echo "### Hard Facts sent to the model"
+            echo ""
+            echo '```json'
+            cat fact-sheet.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Exit 2 (AI config missing/rejected) fails the run — better a failed
+      # dispatch than a committed report without analysis. Model outages
+      # (timeout/rate_limit/outage) degrade inside the script to a
+      # facts-only report plus a ::warning::, and the run proceeds.
+      - name: Call model and write report
+        run: node scripts/generate-impact-report.mjs fact-sheet.json
+
+      - name: Commit and push report
+        run: |
+          set -euo pipefail
+          # git diff alone misses a brand-new (untracked) report, so ask status.
+          if [ -z "$(git status --porcelain -- "$REPORT")" ]; then
+            echo "::notice::Report identical to the one on main; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Keep a copy of the fresh report outside the worktree so a rejected
+          # push can replay it onto the newest main.
+          cp "$REPORT" report-fresh.md
+          commit_and_push() {
+            git add "$REPORT"
+            if git diff --cached --quiet; then
+              echo "No pending changes; nothing to push."
+              return 0
+            fi
+            # [skip ci]: the report commit must not burn another CI run.
+            git commit -m "docs(reports): refresh AI Impact Report [skip ci]"
+            git push origin "HEAD:main" && echo "Pushed."
+          }
+
+          if commit_and_push; then exit 0; fi
+
+          for attempt in 2 3; do
+            echo "::warning::Push rejected; re-syncing with main (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            mv report-fresh.md "$REPORT"
+            if commit_and_push; then exit 0; fi
+          done
+
+          echo "::error::Could not push the report after 3 attempts."
+          exit 1
+        # If branch protection on main does not let the Actions bot push, this
+        # is the step that fails; see docs/metrics-setup.md for the setting.

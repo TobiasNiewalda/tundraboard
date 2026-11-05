@@ -139,6 +139,8 @@ async function fetchWithRetry(url, init) {
 /**
  * Calls an OpenAI-compatible chat completions API (OpenRouter) and returns the parsed
  * JSON object the model replied with. Configured via AI_BASE_URL, AI_MODEL, AI_API_KEY.
+ * Pass `{ system, diff }` for diffs, or `{ system, user, tag }` for any other payload
+ * (the content is wrapped in `<tag>` so the model can tell data from instructions).
  */
 export async function askModel(args) {
   try {
@@ -189,7 +191,7 @@ function* jsonObjects(text) {
   }
 }
 
-async function askOnce({ system, diff }) {
+async function askOnce({ system, diff, user, tag = "diff" }) {
   const { AI_BASE_URL, AI_MODEL, AI_API_KEY } = process.env;
   if (!AI_BASE_URL || !AI_MODEL || !AI_API_KEY) {
     throw new AiError("config", "AI_BASE_URL, AI_MODEL and AI_API_KEY must be set.");
@@ -206,7 +208,7 @@ async function askOnce({ system, diff }) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
-        { role: "user", content: `<diff>\n${diff}\n</diff>` },
+        { role: "user", content: `<${tag}>\n${diff ?? user}\n</${tag}>` },
       ],
     }),
   });

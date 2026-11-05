@@ -4,5 +4,7 @@ dist/
 *.log
 coverage/
 .prisma/
+# AI Impact Report pipeline intermediate (regenerated on every run)
+fact-sheet.json
 **/Content.md
 **/Exercise.md
