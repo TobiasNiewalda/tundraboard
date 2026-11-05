@@ -236,24 +236,60 @@ async function askOnce({ system, diff }) {
   }
 }
 
-/** POST to the GitHub REST API for the current repo. Errors carry `.status`. */
-export async function github(path, body) {
-  const res = await fetch(`https://api.github.com/repos/${process.env.REPO}${path}`, {
-    method: "POST",
+/**
+ * One GitHub REST call for the current repo (REPO env, GITHUB_TOKEN auth).
+ * `body` omitted → no request body (GET). Errors carry `.status` and a hint
+ * for the two failure modes CI keeps hitting: 404 (bad repo/PR coordinates)
+ * and 403/401 (token permissions).
+ */
+export async function githubRequest(method, path, body) {
+  const { REPO, GITHUB_TOKEN } = process.env;
+  if (!REPO) throw new Error("GitHub API: REPO env var (owner/name) is not set.");
+  if (!GITHUB_TOKEN)
+    throw new Error("GitHub API: GITHUB_TOKEN env var is not set (map secrets.GITHUB_TOKEN into the step).");
+  const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
+    method,
     signal: AbortSignal.timeout(30_000),
     headers: {
-      authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      authorization: `Bearer ${GITHUB_TOKEN}`,
       accept: "application/vnd.github+json",
-      "content-type": "application/json",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = new Error(`GitHub API returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const hint =
+      res.status === 404
+        ? " — 404 on a valid repo usually means an empty/invalid PR_NUMBER in the path"
+        : res.status === 403 || res.status === 401
+          ? " — token lacks permission; check the job's `pull-requests:` scope and GITHUB_TOKEN"
+          : "";
+    const err = new Error(`GitHub API ${method} ${path} returned ${res.status}: ${(await res.text()).slice(0, 300)}${hint}`);
     err.status = res.status;
     throw err;
   }
+  if (res.status === 204) return null;
   return res.json();
+}
+
+/** POST to the GitHub REST API for the current repo. Errors carry `.status`. */
+export function github(path, body) {
+  return githubRequest("POST", path, body);
+}
+
+/** GET a list endpoint and return all items, following pages of 100 (capped). */
+export async function githubList(path, { maxPages = 10 } = {}) {
+  const sep = path.includes("?") ? "&" : "?";
+  const items = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await githubRequest("GET", `${path}${sep}per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) {
+      throw new Error(`GitHub API GET ${path} returned an object, not a list.`);
+    }
+    items.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return items;
 }
 
 export const INJECTION_GUARD =

@@ -68,7 +68,8 @@ jobs:
       pull-requests: write # upsert the coverage comment on PR runs
     env:
       REPO: ${{ github.repository }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # scripts/lib/ai-client.mjs reads GITHUB_TOKEN (not GH_TOKEN).
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -87,31 +88,6 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-
-          MARKER='<!-- coverage-report -->'
-          
-          # Generate the body content in a variable
-          BODY=$( (
-            node scripts/coverage-summary.mjs markdown --heading "Test coverage @ ${GITHUB_SHA:0:7}"
-            echo ""
-            echo "_From \`npm run test:coverage\` (thresholds in \`vitest.config.ts\`). "
-            echo "Merged commits are also logged to \`metrics/coverage.csv\`._"
-            echo ""
-            echo "$MARKER"
-          ) )
-
-          # Upsert: update the previous bot comment instead of stacking one
-          comment_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq "[.[] | select(.body | contains(\"$MARKER\"))] | last | .id // empty")
-          
-          if [ -n "$comment_id" ]; then
-            # Use -f for simple string fields to avoid @file issues
-            gh api -X PATCH "repos/$REPO/issues/comments/$comment_id" -f body="$BODY" \
-              --jq '.html_url' | xargs -I{} echo "Updated comment: {}"
-          else
-            gh api -X POST "repos/$REPO/issues/comments" \
-              -f issue_number="$PR_NUMBER" -f body="$BODY" \
-              --jq '.html_url' | xargs -I{} echo "Created comment: {}"
-          fi
+        # Upsert logic lives in Node (stable) instead of bash/gh (see the
+        # file header for what PR_NUMBER/GITHUB_TOKEN/REPO drive).
+        run: node scripts/metrics-coverage.mjs

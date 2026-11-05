@@ -30,7 +30,9 @@ jobs:
       contents: write # append metrics/coverage.csv and push to main
     env:
       CSV: metrics/coverage.csv
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LOG_CSV: "1" # activates the CSV-recording half of scripts/metrics-coverage.mjs
+      REPO: ${{ github.repository }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -48,44 +50,11 @@ jobs:
       - run: npm run db:generate
       - run: npm run test:coverage
 
+      # All computing, de-duplication, alerting and row-appending now live in
+      # Node (scripts/metrics-coverage.mjs) — this step must stay after
+      # `npm run test:coverage`, which produces coverage/coverage-summary.json.
       - name: Compute and append row
-        run: |
-          set -euo pipefail
-          mkdir -p "$(dirname "$CSV")"
-          [ -f "$CSV" ] || echo 'date,commit,lines,functions,branches,statements' > "$CSV"
-
-          if grep -q ",${GITHUB_SHA}," "$CSV"; then
-            echo "::notice::Commit ${GITHUB_SHA:0:7} is already recorded; nothing to do."
-            exit 0
-          fi
-
-          # Alert threshold from analysis.md: a >5 pp lines-coverage drop in a
-          # single merge must raise a flag, so compare against the previous row.
-          prev_lines=$(tail -n +2 "$CSV" | tail -n 1 | cut -d, -f3 || true)
-          cur_lines=$(node scripts/coverage-summary.mjs pct lines)
-
-          regression=""
-          if [ -n "$prev_lines" ]; then
-            drop=$(awk -v p="$prev_lines" -v c="$cur_lines" 'BEGIN { printf "%.2f", p - c }')
-            if awk -v d="$drop" 'BEGIN { exit !(d > 5) }'; then
-              regression="**ALERT: dropped ${drop} pp vs previous commit (> 5 pp threshold)**"
-              echo "::warning::Lines coverage dropped ${drop} pp (${prev_lines}% -> ${cur_lines}%) — investigate per analysis.md."
-            fi
-          fi
-
-          row=$(node scripts/coverage-summary.mjs csv-row "$(date -u +%Y-%m-%d)" "$GITHUB_SHA")
-          echo "$row" >> "$CSV"
-          # Hand the exact row to the push step so it can re-append after a re-sync.
-          echo "ROW=$row" >> "$GITHUB_ENV"
-
-          {
-            node scripts/coverage-summary.mjs \
-              markdown --heading "Coverage — ${GITHUB_SHA:0:7}"
-            echo ""
-            [ -n "$regression" ] && echo "$regression" && echo ""
-            echo "Logged in \`$CSV\` as \`$row\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "Recorded: $row"
+        run: node scripts/metrics-coverage.mjs
 
       - name: Commit and push
         run: |
