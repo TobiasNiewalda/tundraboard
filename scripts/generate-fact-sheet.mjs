@@ -2,13 +2,18 @@
  * generate-fact-sheet.mjs — the "Hard Facts" input for the AI Impact Report.
  * Reads metrics/coverage.csv and metrics/cycle_time.csv, computes average /
  * latest / delta-vs-period-start for each series, pulls the current month's
- * OpenRouter spend and token usage through the logic in fetch_ai_usage.js,
+ * OpenRouter spend and token usage through the logic in fetch_ai_usage.js
+ * (plus a monthly history — 3 complete months + the current month to date by
+ * default, see AI_USAGE_LOOKBACK_MONTHS), computes the month-over-month trend
+ * (delta, % change, direction) so the analysis model never has to do math,
  * and attaches the baseline/3-month targets from
  * `docs/course_materials/Chapter 5/Lesson 2/analysis.md` as the benchmark.
  *
  * Deliberately numbers-only and deterministic: nothing here calls an LLM.
  * Missing sources never crash the run — they become entries in "gaps" so the
- * report can say "no data" honestly instead of inventing a trend.
+ * report can say "no data" honestly instead of inventing a trend. Without a
+ * management key there is no Analytics API, so `ai_usage.history` is null and
+ * a gap line explains it; all existing scalars stay unchanged.
  *
  * Usage:
  *   node scripts/generate-fact-sheet.mjs > fact-sheet.json
@@ -17,7 +22,9 @@
  * Environment (same as scripts/fetch_ai_usage.js):
  *   OPENROUTER_API_KEY  optional here — without it, ai_usage is null and a
  *                       gap line explains why.
- *   OPENROUTER_MANAGEMENT_KEY optional — unlocks tokens/requests breakdown.
+ *   OPENROUTER_MANAGEMENT_KEY optional — unlocks tokens/requests breakdown
+ *                       and the monthly history the trend is computed from.
+ *   AI_USAGE_LOOKBACK_MONTHS optional — history window (default 4).
  *
  * Exit codes: 0 fact sheet produced (possibly with gaps); 1 internal error.
  */
@@ -118,9 +125,11 @@ function cycleTimeFacts(gaps) {
 }
 
 /**
- * Current-month spend/tokens via fetch_ai_usage.js's collector. Degrades to
- * null + a gap line when no key is configured or the API is unreachable, so
- * the fact sheet (and downstream report) still builds.
+ * Current-month spend/tokens via fetch_ai_usage.js's collector, plus the
+ * monthly history it collected — with the month-over-month trend computed
+ * here (not by the model). Degrades to null + a gap line when no key is
+ * configured or the API is unreachable, and to a missing history (null) when
+ * there is no management key, so the fact sheet still builds.
  */
 async function usageFacts(gaps) {
   if (!process.env.OPENROUTER_API_KEY) {
@@ -137,7 +146,17 @@ async function usageFacts(gaps) {
   const t = f.totals;
   const daysElapsed = Number(f.now.toISOString().slice(8, 10));
   const requests = Number.isFinite(t.request_count) ? t.request_count : null;
-  const spendMetric = f.names.find((n) => /(?:spend|cost)/.test(n));
+  const spendMetric = f.names.find((n) => /(?:spend|cost|total_usage)/.test(n));
+  const months = f.history
+    ? f.history.rows.map((r) => ({
+        month: r.month,
+        complete: r.complete,
+        spend_usd: r.spend_usd === null ? null : round(r.spend_usd, 4),
+        total_tokens: r.total_tokens === null ? null : Math.round(r.total_tokens),
+        requests: r.requests === null ? null : Math.round(r.requests),
+      }))
+    : null;
+  const trend = months ? monthTrend(months) : null;
   const usage = {
     month: f.month,
     spend_usd: spendMetric ? round(Number(t[spendMetric] ?? 0), 4) : null,
@@ -150,12 +169,75 @@ async function usageFacts(gaps) {
     top_models: (f.topModels?.rows ?? [])
       .slice(0, 5)
       .map((r) => ({ model: r.model ?? "unknown", spend_usd: round(Number(r[spendMetric] ?? 0), 4) })),
+    history: months
+      ? {
+          window_months: f.history.window.months,
+          start: f.history.window.start,
+          end: f.history.window.end,
+          truncated: f.history.truncated,
+          basis:
+            "trend compares the latest complete month to the complete month before it; " +
+            "months with complete=false are the current month in progress (month to date) and are excluded from the trend",
+          months,
+          trend,
+        }
+      : null,
     caveats: [f.spendSource, f.analyticsNote].filter(Boolean),
   };
   if (usage.total_tokens === null && usage.requests === null) {
     gaps.push("AI spend: only spend could be read; token utilisation needs OPENROUTER_MANAGEMENT_KEY (see docs/metrics-setup.md).");
   }
+  if (!months) {
+    gaps.push("AI usage history: no monthly history this run — it needs the Analytics API (OPENROUTER_MANAGEMENT_KEY); judge the current month against targets only.");
+  } else if (!trend) {
+    const completeMonths = months.filter((m) => m.complete).length;
+    gaps.push(
+      `AI usage history: only ${completeMonths} complete month(s) in the ${f.history.window.months}-month window — not enough for a month-over-month trend.`,
+    );
+  }
+  if (f.history?.truncated) {
+    usage.caveats.push("The Analytics API truncated the monthly result set; history totals may be undercounts.");
+  }
   return usage;
+}
+
+/** Decimal places per trended metric when rounding: money to 4, counts to 0. */
+const TREND_METRICS = { spend_usd: 4, total_tokens: 0, requests: 0 };
+
+/**
+ * Month-over-month trend from a monthly history: the latest COMPLETE month
+ * against the complete month before it. Month-to-date months (complete=false)
+ * are never compared — a partial month against a full one always looks like a
+ * drop, which is exactly the arithmetic the model must not be left to do.
+ * Per metric: null when either month lacks the value (e.g. key-level spend
+ * fallback has no per-month history); the whole trend is null when fewer than
+ * two complete months exist or nothing is computable.
+ */
+export function monthTrend(months) {
+  const full = months.filter((m) => m.complete);
+  if (full.length < 2) return null;
+  const from = full.at(-2);
+  const to = full.at(-1);
+  const trend = {};
+  for (const [key, dp] of Object.entries(TREND_METRICS)) {
+    const a = from[key];
+    const b = to[key];
+    if (a === null || a === undefined || b === null || b === undefined) {
+      trend[key] = null;
+      continue;
+    }
+    const delta = b - a;
+    trend[key] = {
+      from_month: from.month,
+      to_month: to.month,
+      from: round(a, dp),
+      to: round(b, dp),
+      delta: round(delta, dp),
+      pct_change: a === 0 ? null : round((delta / Math.abs(a)) * 100, 1),
+      direction: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
+    };
+  }
+  return Object.values(trend).some((v) => v !== null) ? trend : null;
 }
 
 const cutoffDate = () => new Date(Date.now() - PERIOD_DAYS * 86_400_000).toISOString().slice(0, 10);

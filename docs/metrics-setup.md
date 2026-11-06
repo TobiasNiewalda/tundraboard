@@ -2,12 +2,12 @@
 
 Automated collection of three AI-impact metrics (Chapter 5, Lesson 2):
 
-| Metric                            | Collector                                  | Output                             |
-| --------------------------------- | ------------------------------------------ | ---------------------------------- |
-| Cycle time (first commit → merge) | `.github/workflows/metrics-cycle-time.yml` | `metrics/cycle_time.csv`           |
-| Test coverage                     | `.github/workflows/metrics-coverage.yml`   | `metrics/coverage.csv`             |
-| AI tool spend / token utilisation | `scripts/fetch_ai_usage.js`                | Markdown snippet for `analysis.md` |
-| AI Impact Report (quarterly)      | `.github/workflows/generate-report.yml`    | `docs/reports/AI-Impact-Report-latest.md` |
+| Metric                            | Collector                                  | Output                                              |
+| --------------------------------- | ------------------------------------------ | --------------------------------------------------- |
+| Cycle time (first commit → merge) | `.github/workflows/metrics-cycle-time.yml` | `metrics/cycle_time.csv`                            |
+| Test coverage                     | `.github/workflows/metrics-coverage.yml`   | `metrics/coverage.csv`                              |
+| AI tool spend / token utilisation | `scripts/fetch_ai_usage.js`                | Markdown snippet for `analysis.md` (+ monthly history JSON for the fact sheet) |
+| AI Impact Report (quarterly)      | `.github/workflows/generate-report.yml`    | `docs/reports/AI-Impact-Report-latest.md`           |
 
 ## 1. Environment variables
 
@@ -19,6 +19,7 @@ automatically (dotenv is already a dependency); see `.env.example`.
 | `OPENROUTER_API_KEY`        | **Yes**  | Any OpenRouter API key ([openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)). `GET /api/v1/key` returns the key's monthly spend — this alone produces a valid snippet.                                                                |
 | `OPENROUTER_MANAGEMENT_KEY` | Optional | Unlocks the **Analytics API** (token utilisation, per-model breakdown) and the account credit balance. Create it under **Settings → API Keys → Manage → New Management Key**. Without it the snippet still renders and says which parts are missing. |
 | `OPENROUTER_BASE_URL`       | Optional | Override the API endpoint (tests / proxying). Defaults to `https://openrouter.ai/api/v1`.                                                                                                                                                            |
+| `AI_USAGE_LOOKBACK_MONTHS`  | Optional | Months of usage history `collectFacts()` gathers (complete months + the current month to date). Default `4` = 3 complete + current MTD; clamped to 1–24. It only feeds the fact sheet — the printed snippet is always the single-month view.           |
 
 Run it (PowerShell):
 
@@ -29,6 +30,26 @@ node scripts/fetch_ai_usage.js >> analysis.md  # append under the Spend/Usage se
 ```
 
 Exit codes: `0` success, `2` missing configuration, `1` API failure.
+
+### Monthly history (`collectFacts().history`)
+
+`scripts/generate-fact-sheet.mjs` reuses `collectFacts()`, which runs one
+Analytics query at `granularity: "month"` over the whole lookback window and
+buckets the rows into a `history` structure: per UTC month, `spend_usd`,
+`total_tokens` and `requests` (the three tracked series — per-model history is
+deliberately **not** fetched; the top-models table stays current-month only).
+Notes:
+
+- Cost is recognised by the metric's currency display format or by name —
+  OpenRouter renamed `spend` to `total_usage`, and the old spelling is still
+  detected. Metrics absent from `/analytics/meta` degrade to missing columns,
+  not crashes.
+- If the response reports `metadata.truncated`, totals may omit rows: the
+  snippet prints a warning bullet and `history.truncated` is set so the fact
+  sheet can caveat it — undercounts are never presented silently as complete.
+- Without a management key there is no Analytics API: `history` stays `null`,
+  the snippet still prints this key's current-month spend, and the fact sheet
+  records a gap line.
 
 ## 2. GitHub Secrets
 
@@ -60,7 +81,8 @@ repository contents only"), so the workflow stays authorised even if
 | `GITHUB_TOKEN`                           | always (automatic)                                                              | Provided by Actions; never create it manually.                                                                                                               |
 | `AI_API_KEY`                             | AI Impact Report + PR review workflows                                          | The OpenRouter key used for the model call. Falls back to `OPENROUTER_API_KEY` in the report workflow, so one of the two must exist.                          |
 | `OPENROUTER_API_KEY`                     | AI Impact Report (spend row + fallback model key)                               | **Settings → Secrets and variables → Actions → New repository secret.** Without it the fact sheet records a gap instead of failing.                           |
-| `OPENROUTER_MANAGEMENT_KEY`              | only for token utilisation in the report                                        | Same place as above; unlocks the Analytics API (tokens, per-model spend).                                                                                     |
+| `OPENROUTER_MANAGEMENT_KEY`              | for token utilisation, per-model spend and the monthly history in the report      | Same place as above; unlocks the Analytics API. Without it `ai_usage.history` is `null`, the trend section prints one explanatory line, and a gap is recorded — the fact sheet still builds. |
+| `AI_USAGE_LOOKBACK_MONTHS` (variable)    | optional — widens/narrows the history window (default 4)                           | Set in the workflow env if a longer window is wanted; max 24.                                                                                                  |
 | `AI_BASE_URL` / `AI_MODEL` (variables)   | optional                                                                        | Already used by PR review (see `docs/ai-review-setup.md`). The report overrides the model itself; see section 7.                                              |
 
 ## 3. Repository settings checklist (one-time)
@@ -177,18 +199,28 @@ One `workflow_dispatch` run produces the whole report in three stages:
 1. **Fact sheet** — `scripts/generate-fact-sheet.mjs` reads
    `metrics/coverage.csv` and `metrics/cycle_time.csv`, computes
    average / latest / Δ-vs-period-start (92-day window) per series, pulls the
-   current month's spend and token usage through `collectFacts()` from
-   `scripts/fetch_ai_usage.js`, and embeds the baseline/3-month targets from
+   current month's spend and token usage **plus a monthly history** (default:
+   3 complete months + current month-to-date, via `collectFacts()` from
+   `scripts/fetch_ai_usage.js`) through the Analytics API, **computes the
+   month-over-month trend per metric (delta, % change, direction — latest
+   complete month vs the complete month before it) so the model never has to
+   do math**, and embeds the baseline/3-month targets from
    `docs/course_materials/Chapter 5/Lesson 2/analysis.md`. Missing sources
    become explicit `gaps` entries — the pipeline never blocks on absent data.
+   Only Spend, Total tokens and Requests are tracked historically; per-model
+   data stays current-month only.
 2. **Model analysis** — `scripts/generate-impact-report.mjs` sends that JSON to
    OpenRouter via the shared `scripts/lib/ai-client.mjs`, under an "Anti-Fluff"
    system prompt: dry data-analyst persona, every claim in
    `Observed → Result` form, banned marketing vocabulary (leverage,
    game-changer, …), and an instruction to report flat or missing data as
-   exactly that. Only numbers from the fact sheet may appear.
-3. **Report** — the numeric tables are rendered by the script (not the model),
-   combined with the analysis, and committed to
+   exactly that. The prompt also forbids re-deriving the pre-computed trend or
+   comparing the partial current month against complete ones. Only numbers
+   from the fact sheet may appear.
+3. **Report** — the numeric tables are rendered by the script (not the model) —
+   including the monthly history table with its month-over-month line, which
+   degrades to an explicit "not available" note when the Analytics API was
+   unreachable — combined with the analysis, and committed to
    `docs/reports/AI-Impact-Report-latest.md` on `main` with `[skip ci]`.
 
 ### Trigger it
@@ -207,8 +239,10 @@ purpose — quarterly means someone decides when the quarter is worth reporting.
   `vars.AI_IMPACT_MODEL`, `vars.AI_MODEL` or the `model` input is set. Use the
   **plain OpenRouter id** (`owner/model`, optionally `:free`) — the API rejects
   the harness-style `openrouter/…` prefix with a 400.
-- **Optional:** `OPENROUTER_MANAGEMENT_KEY` for tokens/requests per model;
-  without it the usage table shows spend only and says so under "Known gaps".
+- **Optional:** `OPENROUTER_MANAGEMENT_KEY` for tokens/requests per model and
+  for the monthly history table + month-over-month trend; without it the usage
+  table shows spend only and the history section prints a "not available" note,
+  with both explained under "Known gaps".
 - **Branch protection:** same Actions bypass as the metrics workflows
   (checklist item 1) — the report step pushes directly to `main`.
 - The report workflow needs **no `npm ci`**: both scripts are plain Node and
@@ -231,6 +265,9 @@ node scripts/generate-impact-report.mjs fact-sheet.json
 | Condition                          | What happens                                                              |
 | ---------------------------------- | ------------------------------------------------------------------------- |
 | CSV missing / thin / no key for usage | Reported as `gaps` in the fact sheet and in the report's "Known gaps". |
+| No management key (or Analytics API down) | Current-month spend still renders; `ai_usage.history` is `null`, a gap line says why, and the history section prints one "not available" note instead of a table. No month-over-month claim is made. |
+| Analytics API truncates the result set | `history.truncated` + a caveat line surface it; the model must flag the undercount risk under "Data quality". |
+| Fewer than 2 complete months in the window | `history.trend` is `null`; the report states that no month-over-month trend can be established. |
 | Model outage / rate limit          | Facts-only report is committed with a `::warning::` — no prose is invented. |
 | Missing/invalid AI key             | Run fails (exit 2); nothing is committed.                                 |
 | Model sneaks in a banned buzzword  | Kept verbatim for transparency + `::warning::` listing the words.         |
@@ -238,7 +275,8 @@ node scripts/generate-impact-report.mjs fact-sheet.json
 ## Troubleshooting
 
 - **401/403 from the script** → key typo'd/expired, or `OPENROUTER_MANAGEMENT_KEY`
-  missing when Analytics data is wanted (the snippet degrades instead of failing).
+  missing when Analytics data is wanted (the snippet degrades instead of failing;
+  the fact sheet loses `ai_usage.history` and records a gap instead).
 - **Push rejected in a workflow** → branch protection without an Actions bypass
   (see checklist item 1).
 - **`0.00 days` for a squash-merged PR** → all work was committed and merged in
