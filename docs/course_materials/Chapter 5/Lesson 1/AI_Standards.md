@@ -46,7 +46,7 @@ When prompting with internal code, use a "minimal viable context" approach to pr
 ## Prompt Library
 To maintain consistency, we share high-performing prompt templates.
 
-- **Location:** `/docs/ai/prompts/` (Version controlled within the repo, organized by task family: `code-generation/`, `testing/`, `review/`, and `documentation/`).
+- **Location:** `promts/` (Version controlled within the repo, organized by task family: `code-generation/`, `testing/`, `review/`, and `documentation/`).
 - **Contribution:** If you develop a prompt that consistently produces high-quality results for a recurring task, submit it via PR to the prompts directory.
 - **Review Cadence:** Prompt templates are reviewed during monthly technical syncs to prune obsolete patterns and promote successful ones.
 
