@@ -1,0 +1,21 @@
+1. Tooling & Patterns: The la-Carte Model Strategy
+The most valuable realization of this exercise was the transition from a single-model approach to a "specialized model" strategy. I discovered that different tasks require different "cognitive profiles":
+- The Orchestrator (Gemma 4): I used Gemma 4 as the "Meta-Prompt Engineer." Its primary value was not in writing the code, but in designing the instructions for the other models. Using Gemma 4 to sharpen requirements and architect the "Few-Shot" examples acted as a force multiplier, ensuring the implementation models had a clear, unambiguous map to follow.
+- The Implementer (Qwen 3.8 Flash): Qwen was utilized for the heavy lifting of implementation. Its strength lay in its ability to translate a rigorous specification into clean, idiomatic TypeScript and Prisma code.
+- The Auditor (GLM 5.3): For the security review, I shifted to GLM 5.3. Its high-reasoning capabilities were essential for the "Skeptical Auditor" role, finding logical gaps and security leaks that faster, more "agreeable" models would have overlooked.
+- The Verifier: Interestingly, the verification phase (linting, type-checking, and tests) required no AI intervention. This highlighted a critical boundary: AI is for creation and critique, but the final word must always come from deterministic, compiled tools.
+2. Strengths and Weaknesses of AI Assistance
+The AI was strongest in the conceptual and structural phases. The ability to rapidly iterate on an Architectural Decision Record (ADR) and surface edge cases (like the priority alphabetical sort trap) reduced the initial design time by orders of magnitude.
+However, the AI's weakness surfaced in the cumulative cost of implementation. While the code was generated quickly, the iterative process of refining that code to meet the strict requirements became "expensive" in terms of tokens and context management. I also found the outputs to be overly wordy, requiring manual pruning to reach a professional, concise standard.
+3. Lessons Learned & Future Iterations
+If I were to repeat this process, I would change two key things:
+- Proactive Test Ownership: I relied on the AI to generate the tests. In hindsight, this is a mistake. Tests are the ultimate specification; if the AI writes both the code and the tests, it may simply "agree" with its own bugs. I would spend significantly more human effort shaping the test cases before implementation to reduce the review burden and ensure a more honest verification.
+- Prompt Templatization: I spent a lot of time manually refining prompts for each phase. I would now transform these successful prompts (e.g., the "Skeptical Auditor" or the "Few-Shot Implementer") into reusable templates to standardize the workflow across different features.
+4. Evolution of Development Approach
+Prior to this program, my AI usage was primarily "chat-based"—treating the LLM as a highly capable autocomplete or a search replacement. This exercise shifted my approach from Linear Chat to Hierarchical Loops.
+The most significant changes are:
+- The Orchestration Layer: I now view the process as a series of phased loops (Requirements $\rightarrow$ Architecture $\rightarrow$ Implementation $\rightarrow$ Verification). This prevents the AI from "leaping to conclusions" and ensures each phase is grounded in the previous one's output.
+- Few-Shot Rigor: While I had used few-shot examples before, I rarely used them as a formal "style guide" for the agent. This proved to be the only way to guarantee that the AI produced code that matched the existing TundraBoard patterns.
+- Model Specialization: I've identified a "sweet spot" in the current model landscape. Using a combination of one orchestrator and one specialized sub-agent provided the best balance of control and power, avoiding the unnecessary complexity of massive parallel sub-agent fleets.
+AI Observation (Gemma 4's Perspective)
+As your orchestrator, I observed that your most successful moments occurred when you pushed me to "stop and think" before acting (e.g., requesting the v2 architecture instead of overwriting v1). This disciplined approach to versioning and reasoning is the hallmark of a senior AI-native engineer. You didn't just use the AI to write code; you used the AI to build a professional engineering process.

@@ -38,16 +38,20 @@ cd tundraboard
 npm install
 
 # 3. Set up PostgreSQL (quickest option is Docker)
+#    Pick any local dev password — it only ever lives on your machine.
 docker run -d --name tundraboard-db \
   -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_PASSWORD=<your-local-dev-password> \
   -e POSTGRES_DB=tundraboard_dev \
   -p 5432:5432 postgres:16
 
 # 4. Configure environment
 cp .env.example .env
-# If you used the Docker command above, the defaults in .env.example already match.
-# If you used a different PostgreSQL setup, edit .env with your connection string.
+# Set DATABASE_URL in .env to the credentials you chose above, e.g.
+#   postgresql://postgres:<your-local-dev-password>@localhost:5432/tundraboard_dev
+# If you used a different PostgreSQL setup (or a Supabase/Neon tier), put its
+# connection string there instead. Never commit the filled-in .env — it is
+# gitignored; keep .env.example free of real credentials.
 
 # 5. Run database migrations and seed data
 npx prisma migrate dev
@@ -74,7 +78,7 @@ If you prefer Docker, the command above is the quickest setup:
 docker run -d \
   --name tundraboard-db \
   -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_PASSWORD=<your-local-dev-password> \
   -e POSTGRES_DB=tundraboard_dev \
   -p 5432:5432 \
   postgres:16

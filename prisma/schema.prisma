@@ -105,6 +105,20 @@ model Task {
   @@index([assigneeId])
   @@index([status])
   @@index([estimatedHours])
+  // Composite indexes for projectId-filtered keyset pages (equality on the
+  // leading column). The WORKSPACE-scoped default paths are served by
+  // (workspace_id, …) indexes built in migration 20261108000001 — the
+  // security audit showed project-led composites cannot serve a query with
+  // no project_id predicate.
+  @@index([projectId, createdAt(sort: Desc), id(sort: Asc)], map: "tasks_project_created_idx")
+  @@index([projectId, updatedAt(sort: Desc), id(sort: Asc)], map: "tasks_project_updated_idx")
+  // NOTE: the tasks table additionally carries DB-managed columns that are
+  // intentionally absent from this model (same pattern as search_vector in
+  // migration 20261020000000):
+  //   - workspace_id  uuid NOT NULL — trigger-maintained copy of
+  //     projects.workspace_id (tasks_workspace_id_sync)
+  //   - priority_rank smallint GENERATED ALWAYS ... STORED
+  // Raw SQL in taskService.ts owns these; do not drop them via db push.
   @@map("tasks")
 }
 

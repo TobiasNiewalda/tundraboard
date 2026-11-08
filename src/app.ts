@@ -7,7 +7,7 @@ import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { workspaceRouter } from "./routes/workspaces.js";
 import { projectRouter } from "./routes/projects.js";
-import { taskRouter } from "./routes/tasks.js";
+import { taskRouter, workspaceTaskSearchRouter } from "./routes/tasks.js";
 import { commentRouter } from "./routes/comments.js";
 import { labelRouter } from "./routes/labels.js";
 import { notificationRouter } from "./routes/notifications.js";
@@ -34,6 +34,9 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/health", healthRouter);
 app.use("/auth", authRouter);
 app.use("/workspaces", workspaceRouter);
+// Advanced task search — workspace-addressed so tenant scope is structural
+// (Phase 1 E1). mergeParams gives the router access to :workspaceId.
+app.use("/workspaces/:workspaceId/tasks", workspaceTaskSearchRouter);
 app.use("/projects", projectRouter);
 app.use("/tasks", taskRouter);
 app.use("/comments", commentRouter);
