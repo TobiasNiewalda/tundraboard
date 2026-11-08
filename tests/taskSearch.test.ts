@@ -19,7 +19,8 @@
  *     Run with:
  *       docker compose -f .devcontainer/docker-compose.yml up -d db
  *       npm run db:migrate        # or prisma migrate deploy
- *       $env:TUNDRABOARD_TEST_DB_URL = "postgresql://postgres:postgres@localhost:5432/tundraboard_dev"
+ *       $env:TUNDRABOARD_TEST_DB_URL = "postgresql://<user>:<password>@localhost:5432/tundraboard_dev"
+ *                                    # same credentials as your local .env DATABASE_URL
  *       npx vitest run tests/taskSearch.test.ts
  *
  *     Without TUNDRABOARD_TEST_DB_URL the layer-B suite is skipped, so the
