@@ -1,0 +1,972 @@
+I need you to evaluate two primary architectural paths:
+
+Option A: Integrated PostgreSQL Search. Leveraging the existing tsvector generated column, GIN indexes, and websearch_to_tsquery.
+Option B: External Search Engine. Integrating a dedicated tool like Elasticsearch, Meilisearch, or Algolia.
+
+For both options, you must analyze:
+1. Retrieval Precision & Recall: How does each handle the specific requirements (especially the 'Priority' mapping and 'Workspace' scoping)?
+2. Operational Complexity: Consider deployment, index synchronization (the 'dual-write' problem), and maintenance overhead.
+3. Performance at Scale: How do they behave when the task count grows from 10k to 1M?
+4. Cost & Sovereignty: Infrastructure costs vs. vendor lock-in.
+
+The Final Output:
+Provide a clear Architectural Decision Record (ADR). This should include:
+- The evaluated alternatives.
+- The reasoning for the chosen path (the 'Why').
+- The specific implementation strategy for the chosen path (e.g., if Postgres: how to handle the priority sort and the cursor tiebreaker in a single query).
+- Any 'Technical Debt' or risks accepted by this decision. 
+-Thought · 1.5s
+Let me start by understanding the codebase. The user is asking for an ADR about search architecture for "tundraboard" — it seems to be a task board app that uses PostgreSQL. I should investigate the repo to understand the current schema, the mention of tsvector generated columns, the priority mapping, workspace scoping, cursor pagination, and so on.
+
+Let me start by exploring the project.
+I'll start by exploring the codebase to ground this decision in the actual schema, search requirements, and existing infrastructure.
+$ Get-ChildItem -Force | Select-Object Name, Mode
+(27 earlier lines)
+eslint.config.js  -a----
+mcp-config.json   -a----
+package-lock.json -a----
+package.json      -a----
+README.md         -a----
+tsconfig.json     -a----
+vitest.config.ts  -a----
+→Explored: 1 search
+✱Glob "**/*.{md,sql,ts,tsx}" (80 matches)
+-Thought · 1.8s
+Let's check the key files:
+1. Full-text search migration: prisma/migrations/20261020000000_add_full_text_search/migration.sql
+2. Prisma schema
+3. Task service / routes (to check search implementation, priority mapping, workspace scope, cursor pagination)
+4. Probably the requirements document that mentions "priority mapping" and "workspace scope" — could be analysis.md or something within docs.
+
+Let's read these in parallel.
+→Explored: 1 read, 2 searches
+→Read prisma\migrations\20261020000000_add_full_text_search\migration.sql
+✱Glob "prisma/schema.prisma" (1 match)
+✱Grep "websearch_to_tsquery|tsvector|search" in src (2 matches)
+-Thought · 1.3s
+The main items to read:
+1. prisma/schema.prisma — the complete schema (tasks, workspaces, priorities)
+2. src/services/taskService.ts — the current search implementation
+3. src/routes/tasks.ts — the query parameters, the parts related to search, priority mapping, workspace scope, and cursor pagination
+
+Also, I'll look for a requirements document that mentions "priority mapping" and "workspace scope" — it might be in analysis.md, docs/, or promts/. Let me try grepping for "cursor" and "priority".
+→Explored: 2 reads
+→Read prisma\schema.prisma
+→Read src\services\taskService.ts
+-Thought · 1.7s
+Next, I'll check the following:
+1. The tasks route — how search is exposed, and whether there's workspace scope, cursor pagination, and priority sort/mapping requirements.
+2. The requirements document — grep for "priority" mapping, "workspace" scope, and "cursor" within docs/ or analysis.md.
+3. The devcontainer/docker-compose for infrastructure (are we already running Postgres in Docker? That would affect operational complexity).
+4. package.json / environment variables for deployment info.
+→Explored: 1 read, 1 search
+→Read src\routes\tasks.ts
+✱Grep "cursor|priority.*(sort|map)|search" in docs (50 matches)
+-Thought · 2.6s
+Excellent — this is a course capstone project ("TundraBoard"), which is developing advanced task search. There's a Phase 1 requirements analysis document: docs/course_materials/Chapter 5/Lesson 4/Exercise 2/phase1_requirements_analysis.md, and possibly a phase1_requirements_log.md as well. Exercise 2's Phase 2 is exactly the architecture exercise the user is asking about: "PostgreSQL full-text search vs. external search engine" → create an ADR.
+
+To ground the ADR in the actual requirements (priority mapping, workspace scoping, cursor tiebreakers, etc.), let's read the entire Phase 1 requirements analysis document. Also check the exercise folder. Let's also look at the deployment context: .devcontainer, docker-compose, package.json, README — in order to assess operational complexity and cost.
+This repo is the TundraBoard capstone — there's a Phase 1 requirements doc for this exact feature. Let me read the full requirements context and the deployment setup before drafting the ADR.
+→Explored: 1 read, 1 search
+→Read docs\course_materials\Chapter 5\Lesson 4\Exercise 2\phase1_requirements_analysis.md
+✱Glob "docs/course_materials/Chapter 5/Lesson 4/Exercise 2/**" (2 matches)
+-Thought · 1.7s
+Excellent. The Phase 1 requirements analysis is thorough and directly leads to the architecture decision. Next, let's check the deployment context: .devcontainer, docker-compose, package.json, README.md, and probably the exercise requirements (Phase 2 — Architecture: "Consider trade-offs (PostgreSQL full-text search vs. external search engines). Document the decision and its rationale.").
+
+Let's look at the devcontainer and package.json to understand the infrastructure, and check whether an ADR directory or ADR template/conventions already exist.
+Phase 1 requirements are locked and detailed — that gives me the actual spec to evaluate against. Now let me check the deployment/infra context and whether the repo has an ADR convention.
+→Explored: 1 read, 2 searches
+→Read package.json
+✱Glob "{.devcontainer,.github}/**" 
+✱Grep "ADR|architecture decision" (9 matches)
+-Thought · 1.9s
+The glob for .devcontainer/.github returned nothing (probably hidden directories are excluded). Let me quickly check those and the README for deployment context. Actually, the glob pattern  {.devcontainer,.github}/** might not match hidden directories. Let me use shell to list. Also check src/middleware/authenticate.ts (501 stub — relevant context) and the deployment info in the README.
+
+Honestly, I have enough material to write the ADR. Let me quickly check the devcontainer/docker-compose to see what infra already exists (single Postgres container? managed hosting?). This bears on the "operational complexity" analysis.
+$ Get-ChildItem -Force .devcontainer, .github -ErrorAction SilentlyContinue | Select-Object FullName
+(5 earlier lines)
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.devcontainer\post-create.sh        
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.github\agents                      
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.github\skills                      
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.github\workflows                   
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.github\ai-security-allowlist.json  
+C:\Users\tobia\Documents\Projects\skillio\tundraboard\.github\dependabot.yml
+→Explored: 1 search
+✱Grep "docker-compose|supabase|neon|rds|render|fly\.io|railway|deploy" (20 matches)
+-Thought · 1.1s
+I need to investigate this further. Let me check the details.
+
+Let me check the docker-compose in .devcontainer to see what services exist, and check the exercise requirements for phase 2 (what form the ADR should take). Also, let me check where the ADR should be saved — it might be a good idea to check the conventions of the docs folder.
+→Explored: 2 reads
+→Read .devcontainer\docker-compose.yml
+→Read docs\course_materials\Chapter 5\Lesson 4\Exercise 2
+-Thought · 3m 11s
+Now I have the full picture:
+
+Context:
+- TundraBoard: TypeScript/Express/Prisma/PostgreSQL 16 (dev container: single compose file with one db service; README mentions Supabase/Neon free tiers as the DB hosting)
+- Existing FTS infrastructure: search_vector generated column (title=A, description=B, English), GIN index, websearch_to_tsquery inside listTasks
+- Feature spec (Phase 1, approved): GET /workspaces/:workspaceId/tasks/search
+  - Workspace scoping is structural via tasks.project_id → projects.workspace_id (tasks has no workspaceId column)
+  - Priority is VarChar(20), needs CASE rank mapping (low=1…urgent=4), lexicographic is wrong
+  - Cursor/keyset pagination: sort tuple (v, id), NULLS LAST mirrored into the predicate, relevance sort uses ts_rank
+  - q + filters + sort + pagination + ts_headline snippets in a single parameterized SQL query
+  - Performance target: p95 ≤ 300ms at 100k tasks per workspace, 100 concurrent searchers; no COUNT(*); limit ≤ 100
+  - Security: parameterization via Prisma.sql, membership check before the query, multi-tenant
+- Data scale question from user: 10k → 1M tasks
+
+What the user asked for: Evaluate Option A (integrated PG search) vs Option B (external: Elasticsearch/Meilisearch/Algolia) across four axes, and produce a final ADR containing the alternatives considered, why, the implementation strategy (if Postgres: how to handle priority sort + cursor tiebreaker in a single query), and accepted technical debt/risks.
+
+Phase 2 of the exercise says: "Discuss the architecture with a reasoning workspace using role setting. Evaluate the trade-offs (PostgreSQL full-text search vs external search engine). Document your decision and reasoning."
+
+So the deliverable is an ADR document. Where should it go? Repo convention: phase docs sit alongside the exercise in docs/course_materials/Chapter 5/Lesson 4/Exercise 2/. The user said "provide a clear Architectural Decision Record (ADR)." I should write it as a file — phase2_architecture_adr.md in the same Exercise 2 folder, consistent with the phase1_requirements_analysis.md naming convention. And also present a summary in chat.
+
+Let me carefully consider the actual analysis — this is the core value here.
+
+Option A: Integrated PostgreSQL Search
+
+Current assets: stored generated search_vector, GIN index, websearch_to_tsquery. Postgres 16.
+
+1. Retrieval precision and recall
+
+Strengths:
+- websearch_to_tsquery: tolerant of OR/AND/NOT/"quoted phrases", never throws errors.
+- Weighted A/B via ts_rank — title matches rank above description matches. Custom weights possible via ts_rank(search_vector, query, 32) weight configuration.
+- Workspace scoping: native — the exact strength here. Scoping is relational (task → project → workspace). In Postgres the scope join is free: JOIN projects p ON p.id = t.project_id WHERE p.workspace_id = $1 in the same query, same snapshot, no need for denormalization for enforcement. Multi-tenant isolation is enforced by the query itself, in the single place the authorization lives.
+  - In external engines, workspace scoping must be denormalized into the index (either push workspace_id onto each task document or index per-workspace). This creates a correctness dependency: if the denormalized field is stale or missing on a document, rows leak or vanish. Cross-workspace ACL bugs migrate into the index pipeline.
+- Priority mapping: Postgres has no native enum for a VarChar(20) — but a CASE expression / ORDER BY with mapping gives exact, deterministic ranking. Also, external engines handle this via a sortable numeric attribute: you'd still add a priority_rank int onto the document at index time — the same mapping, just in a different place.
+- Recall limits (accepted technical debt):
+  - Stemming-based; no typo tolerance (requires fuzzy matching via trigrams / pg_trgm + FUSE / TrigramSimilarity extension).
+  - No prefix completion by default; "run" does not match "running". Actually stemming means 'run' query matches 'running' → 'run' — English stemming causes 'running' to become 'run' in the tsvector, so it does match. But partial-word / in-fix matching is weak ("tundr" doesn't match "tundraboard").
+  - No synonym support without ts_rewrite / thesaurus configuration.
+  - ts_rank is a weak relevance model (TF-IDF-esque with weights, document-length normalization); not BM25. But at task-search scale, users rarely paginate beyond relevance ties, and the sort is secondary to the filters (status/priority/due) in board workflows.
+  - Long documents: descriptions are capped at 5000 chars (schema/validators) — not a problem for the 1MB lexize limit.
+- Comments are not indexed (the spec says title+description) — parity between the options unless B indexes comments; B's advantage requires re-indexing on comment creation → dual-write surface area grows.
+
+2. Operational complexity
+
+Option A:
+- Zero new infrastructure: no new containers in devcontainer, no new SaaS, no new credentials, no new network hops.
+- Index sync: none — the STORED generated column updates transactionally with the row. Writing via Prisma task.update recomputes the vector automatically. The dual-write problem does not exist. It is solved by the database's own write path.
+- One consistent snapshot: search results are transactionally consistent with the board.
+- Maintenance: autovacuum/bloat monitoring on the GIN pending-list (fastupdate), occasional REINDEX; all standard PG operations.
+- Migration is additive: composite index (already planned in NFR-P.2).
+
+Option B (Meilisearch self-hosted / Elasticsearch / Algolia):
+- New stateful service (ES/Meili) or new vendor (Algolia). Dev container + CI + staging + prod all gain a second system.
+- Dual-write problem: tasks mutate constantly on a board app (status/priority drags). Options:
+  1. Application-level dual-write (outside the DB transaction) → drift, partial failures; needs a compensating retry queue + reconciliation job.
+  2. Transactional outbox + worker → correctness but new infra (queue/worker) + operational surface area.
+  3. CDC (Debezium / logical replication) → heaviest, ES actually uses it, but overkill here; Meilisearch has no native PG CDC (need a custom shim, e.g. meilisearch-synchronizer / pg listening).
+- Index freshness: async pipelines mean seconds of lag → user edits a task title, searches, and the old row returns. For a board tool where search is used right after editing, that is a real UX cost.
+- Elasticsearch specifically: JVM heap sizing, shard/ILM management, mapping evolution, security config (RBAC is a paid license tier — basic token auth in self-managed is Platinum… actually ES security got free-tier with 8.x? Basic security features became free in 8.x around 2023: yes, Elasticsearch made security (RBAC, TLS) free in 8.0+. Still, cluster ops are heavy.)
+- Multi-tenancy: filter per query on workspace_id or separate indexes per workspace (index explosion across thousands of workspaces).
+
+3. Performance at scale 10k → 1M
+
+The honest question is what PG's ceiling looks like. Numbers to cite (approximate, honest):
+- GIN + tsquery: bitmap index scan; query latency is roughly proportional to posting-list size of matched terms and rows fetched. 1M rows total, typical search terms matching 1-5% of rows within a workspace-scoped set — with the workspace filter, the scan is narrowed first.
+- Key design decision: leading with project_id/scope. BTree on tasks(project_id, created_at DESC, id) + the GIN on search_vector and Postgres can BitmapAnd, or better: nest loop the scope. Realistic plan: filter by workspace via join first (rows per workspace are a fraction of total), then FTS within. A composite GIN index on (workspace-derived or project_id, search_vector) isn't directly possible (project_id is on tasks — actually it is on tasks! tasks.project_id exists). So we can create a composite GIN: CREATE INDEX ON tasks (project_id, search_vector)? No — GIN composite with a scalar needs the btree_gin extension: CREATE INDEX tasks_project_search_idx ON tasks USING gin (project_id gin_trgm_ops...) — btree_gin supports uuid. USING gin (project_id, search_vector) via btree_gin. That's the scaling story: tenant-local FTS indexes. Even simpler: the planner BitmapAnds tasks_project_id_idx and the GIN vector index.
+- p95 300ms at 100k/workspace with 100 concurrent: comfortably achievable. At 1M total spread across many workspaces, per-workspace sets don't change → latency is per-workspace bounded. What actually hurts: (a) one giant tenant with millions of tasks, (b) common-word queries ("the", 50% matches) → GIN posting lists explode; mitigated with websearch_to_tsquery's AND semantics + scope filter first, (c) ts_rank over all matched rows for relevance sort: ranking is computed over all matches before LIMIT — that's the expensive part at large match cardinalities; mitigated by scope-leading plans and covering indexes; keyset pagination avoids rescanning prior pages.
+- Where B wins: large corpora, fuzzy + typo tolerance at scale, faceted counts (but spec forbids COUNT(*)), sub-10ms p95 at 10M+, typo tolerance built-in (Meili is default), relevance tuning without reindex…
+- Realistic scale of the app: a task-management board for team workspaces; 1M tasks is aggressive growth. Even then PG handles it with indexes + read replicas; Meili on one node handles it easily too, but that isn't the point — the point is A meets the NFR; B buys headroom that isn't needed yet, and pays a continuous ops tax for it.
+- ts_headline cost: re-parses per returned row; capped by limit≤100 (R2 justifies it).
+
+4. Cost and sovereignty
+
+- A: $0 incremental — search is inside the existing DB; no new data egress (task content never leaves the Postgres instance; compliance with workspace data residency, GDPR is easier: one store, one deletion path — cascade delete actually deletes; Algolia needs index purge on workspace deletion, a real footgun for tenant deletion).
+- Tenant deletion: DELETE FROM workspaces cascades in PG; the DB is authoritative. External engines need an explicit purge pipeline, and bugs = data-subject-retention violations. Backups: single pg_dump / PITR; ES snapshots are a second mechanism.
+- B costs: Meili self-hosted = $ VM + ops time; ES = 2-3 nodes + dedicated ops time (realistically $400–1500/mo infra + human time); Algolia = per-record/operation pricing, growing with record count and QPS, vendor lock-in of relevance config, data leaves the estate (DPAs, sub-processors).
+- Lock-in direction: A locks us to Postgres, which is already the system of record — a dependency we've consciously chosen (Prisma's datasource is postgresql). B adds a second dependency.
+
+Decision: Option A.
+
+Triggers to revisit (important for a good ADR): define the point where the decision flips —
+- Relevance complaints from real users that tuning can't fix (typo tolerance demand) → pilot Meilisearch in front of Postgres (keep PG authoritative for ACL/scope) or pg_trgm + FUSE.
+- Single workspace exceeding ~5M tasks, or p95 > 300ms after query-plan fixes.
+- Requirement: cross-entity search (comments, attachments, files) or search analytics/A "search relevance experimentation" program.
+
+Implementation strategy (the meaty part)
+
+Question: "how do we handle the priority sort and the cursor tiebreaker in a single query."
+
+Design:
+
+1. Sort expression resolution (server-side allowlist only). Map sortBy → a SQL expression built from a literal allowlist in TypeScript; never interpolate the client string:
+   - relevance → ts_rank(t.search_vector, q), 400 unless q is present
+   - createdAt → t.created_at, updatedAt, dueDate → columns
+   - priority → CASE t.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END
+     - Note: ELSE 0 handles E12 (unknown stored values don't match a filter — and don't sort garbage: they sort below 'low', deterministic, no 500).
+     - Alternative: ORDER BY CASE ... END DESC is fine at board scale; if you wanted an index-friendly sort, a generated priority_rank smallint column would allow a composite btree — but that's speculative; keep the CASE and accept a sort-per-query within the workspace slice. In fact, worth mentioning as a later refinement: a generated STORED column priority_rank + index (project_id, priority_rank, id). But sorting per workspace at limit≤100 with keyset… hmm, keyset doesn't require an index-ordered scan to be O(limit) per page? A btree on the sort key gives the planner a top-N via an index scan; without it: sort the entire match set. At 1M total rows / ~100k per workspace, sorting 100k rows per query ≈ 20-50ms — tolerable but not great; the keyset predicate WHERE (expr, id) < ($v, $id) still scans and filters. Honest position: for priority, add the generated column later; ship with CASE. Actually let me think whether to recommend priority_rank generated column now. Phase 1 says "no schema (model) changes needed — search_vector already exists" and only requires two composite indexes. The ADR's implementation strategy can note: ship v1 with CASE; priority_rank generated column + partial/composite index is the documented escape hatch if p95 shows sort cost. That's a reasonable staged decision. Hmm, but the user asked for a concrete implementation strategy "how to handle priority sort and cursor tiebreaker in a single query" — the answer is: define the sort expression once via a shared SQL fragment and use it in all three of ORDER BY, the keyset predicate (row comparison), and the SELECT (for cursor-encoding v) — so the cursor value and the order always agree by construction. This "single source of truth for sortExpr" is the key implementation insight.
+   
+2. Row-value comparison keyset with NULLS LAST. FR-3.5/FR-4.4: Postgres row comparison (a, b) < (x, y) is lexicographic and doesn't obey NULLS LAST semantics symmetrically: in a row comparison, NULLs are handled per element with the < semantics: (NULL, 5) < (3, 1) → NULL? Row comparison involving NULL is not simple true/false — ROW(1,NULL) < ROW(1,2) is NULL (indeterminate) → filtered out by WHERE; ROW(1,NULL) < ROW(2,1) → TRUE (compares first element). So a naive row-value predicate with NULLable sort keys (dueDate) is buggy. Two clean fixes:
+   - (a) Sentinel coalesce: for desc, COALESCE(sort_expr, '-infinity'::timestamp) (NULL sorts last in desc → NULL must compare as the smallest value), for asc COALESCE(expr, 'infinity'). Since NULLS LAST in both directions means NULL behaves as the extreme of the order, mapping NULL to the order-extreme sentinel makes the row comparison exactly mirror ORDER BY expr DESC NULLS LAST. Dates: ±infinity timestamps; numbers: ±infinity floats, or large ints; strings: '' / max — careful with title VARCHAR: for desc use COALESCE(title,'') (empty string sorts before any title… actually title is NOT NULL in the schema — title String @db.VarChar(200), not nullable! dueDate nullable, estimatedHours nullable but not a sort key in v1… sort keys: relevance (ts_rank, not null), createdAt (not null), updatedAt (not null), dueDate (nullable!), priority CASE (not null — CASE returns 0), title (not null). So dueDate is the only nullable sort key. Clean: COALESCE(t.due_date, '-infinity'::timestamptz) for desc, 'infinity' for asc. And cursor encoding v = ISO string or null.
+   - (b) Explicit expansion: (expr < $v) OR (expr = $v AND id < $cid) plus NULL branches — verbose, error-prone; prefer (a). Recommend (a): the sentinel mirrors NULLS LAST into the row comparison, and the same expression is reused in the ORDER BY.
+   - Cursor value for a NULL dueDate row: SELECT returns the COALESCE'd expr — so cursor v is the infinity sentinel serialized… ISO for '-infinity' timestamp? Prisma/PG: can't cleanly pass back '-infinity' — actually you can pass the literal string '-infinity'::timestamptz. Simpler: cursor stores v: null for NULL rows, and the predicate binds COALESCE'd sentinel anyway: WHERE (COALESCE(...), id) < (COALESCE($cursorV, '-infinity'::timestamptz), $cursorId). Wait careful: for desc, NULL is last; a page starting after a NULL-due row should return only other NULL rows with smaller id. Cursor v for NULL row under desc = sentinel '-infinity'… then the predicate (coalesce(due,'-inf'), id) < ('-inf', cid) → rows with NULL due (coalesced to -inf) AND id < cid → correct; rows with real dates > -inf excluded → correct. Symmetric for asc with +inf. Good — this works exactly because COALESCE maps NULLS-LAST semantics onto the lexicographic comparison. For relevance (ts_rank) v: rank is a float — cursor encoding uses number. Edge: ranks tie at 0 often (very common with the default ts_rank normalization — many rows share the same rank value; that's why the id tiebreaker is load-bearing).
+   - One subtlety: ts_rank recomputed on re-pagination is not stable under concurrent updates (E10 accepted: point-in-time), fine.
+   - Another subtlety: id is a uuid. ORDER BY id DESC on uuid is a deterministic ordering by uuid byte order — fine as a tiebreaker (total order); "id ascending == insertion order" is not guaranteed with uuid v4 — irrelevant, only determinism required. Cursor comparison id < $cid compares uuid — Postgres supports uuid comparison (btree on uuid exists). Good.
+
+3. Single-query composition. Build with Prisma.sql:
+      const sortExpr = { 
+     relevance: Prisma.sql`ts_rank(t.search_vector, websearch_to_tsquery('english', ${q}))`,
+     createdAt: Prisma.sql`t.created_at`,
+     ...
+     priority: Prisma.sql`CASE t.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END`,
+     dueDate: dir === 'desc' ? Prisma.sql`COALESCE(t.due_date, '-infinity'::timestamptz)` : ...`COALESCE(t.due_date, 'infinity'::timestamptz)`
+   }[sortBy]  // allowlist lookup, Prisma.sql fragments — no user strings in SQL
+      Then:
+      SELECT t.*, p.title ..., <sortExpr> AS cursor_v, rank, snippet
+   FROM tasks t JOIN projects p ...
+   WHERE p.workspace_id = ${ws} AND ...filters... AND (q NULL OR t.search_vector @@ websearch_to_tsquery(...))
+     AND (${cursor} IS NULL OR (<sortExpr>, t.id) < (${cursorV}, ${cursorId}))
+   ORDER BY <sortExpr> DESC NULLS LAST, t.id DESC
+   LIMIT ${limit + 1}
+      Tiebreaker direction: id follows the same direction as primary key (FR-3.4 says <dir>). The row-comparison operator flips with direction: < for desc, > for asc.
+   Important: the same computed <sortExpr> in ORDER BY / cursor predicate / SELECT cursor_v → cursor is self-consistent. The cursor carries sortBy/sortOrder and the server rejects mismatched queries (FR-4.3).
+
+4. Indexes (NFR-P.2 + scaling headroom):
+   - Planned: tasks(project_id, created_at DESC, id DESC), tasks(project_id, updated_at DESC, id DESC).
+   - Scope-first plan shape: join to projects then index-scan tasks per project… the planner BitmapAnds project_id idx + GIN, or uses the scope to drive. Optionally btree_gin composite (project_id, search_vector) — document as a scaling escape hatch. Hmm — btree_gin with uuid + tsvector: supported (GIN composite with opclass from btree_gin). But mention as "measure first."
+   - projects(workspace_id, id) covering-ish index to make scope join cheap (projects already has an index on workspaceId — @@index([workspaceId]) yes).
+   - Partial index: for hot paths tasks(...) WHERE status <> 'cancelled' — over-engineering; skip.
+
+5. Filters as IN lists via ANY: t.status = ANY(${statuses}::text[]) — Prisma: bind text arrays via Prisma.sql — $2::text[]; unknown stored values simply don't match (E12), never 500.
+
+6. Rate limit and auth ordering — requireWorkspaceMember before query; NFR ordering is spec'd; ADR just references it.
+
+7. Snippets: ts_headline('english', coalesce(t.title,'') || ' ' || coalesce(t.description,''), websearch_to_tsquery(...), 'MaxFragments=1,FragmentLength=12')? Default ts_headline emits <b> tags — spec says server-side HTML-escaped + highlight terms… escaping then would escape the <b> too. Careful implementation note: use StartSel/StopSel options with a sentinel like [[ ]]? Or escape first? ts_headline escapes? It doesn't escape the input text. Safe order: raw text in, get <b>, then… you can't blanket-escape. Practical approach used in production: custom delimiters + server-side escape everything, re-inject <mark>. Worth a one-liner in the implementation note as a known subtlety: ts_headline(..., 'StartSel=‹,StopSel=›')? Or simpler: use &#8250;? Implementation: get the snippet with custom non-HTML sentinels (e.g. StartSel='[[' StopSel='] ]'), HTML-escape the whole string, then replace sentinel pairs with <mark>...</mark>. Sentinels that don't appear in escaped output survive the escape. Good, concrete.
+
+8. Testing/validation: acceptance criteria from Phase 1 §4.5; plus EXPLAIN plan checks on seeded 100k+ dataset; property test for "no gaps/dupes across full cursor walk" (E6).
+
+Accepted technical debt / risks
+
+- Relevance quality ceiling: ts_rank ≠ BM25; no typo tolerance, no infix/prefix matching, no synonyms, no ranking learning. Mitigation ladder: pg_trgm fallback for partial words (v2), the FUSE extension, and then external engines (ADR revisit triggers).
+- English-only config hard-coded in the generated column → multilingual workspaces need per-language config / unaccent (unaccent extension + text-search template change = a migration; accepted debt).
+- ts_headline CPU at limit=100 (bounded by design R2).
+- Relevance-sort cursor instability under concurrent writes (E10, accepted; document: pages may show an edited task twice / skip it — acceptable for search but not for exports; exports are explicitly v2 async jobs).
+- Legacy unscoped GET /tasks remains live until deprecated (R6/open follow-up) — risk accepted only for this cycle because it's flagged.
+- Sort CASE on priority is not index-friendly; at per-workspace scale it's a memory sort; the documented upgrade is a generated priority_rank column + composite index if p95 shows the sort cost.
+- Auth stub blocker unchanged (JWT must land first) — dependency not solved by the search ADR.
+- Single Postgres is the shared bottleneck for DB + search under load: search queries compete with transactional traffic; mitigations: scope-leading indexes, read replica later for search-only, statement_timeout per request (recommend e.g. 2s), work_mem tuning for sorts. Add statement_timeout note.
+
+Also rejected alternatives with reasons: B1 Elasticsearch (ops heaviest, dual-write, free-tier security now OK, JVM, shards; justified at 10M+ docs or when faceting/analytics become product), B2 Meilisearch (the cheapest "good relevance" path: typo tolerance, typo-adjacent prefix, great DX; but still dual-write via outbox; would be the choice if typo tolerance became a day-1 requirement; revisit trigger), B3 Algolia (SaaS, best relevance/analytics, but vendor lock-in, per-record cost, data residency/sovereignty concerns for customer task data; sovereignty is an explicit decision axis, so not compatible). Also an honest "B hybrid: keep Postgres as ACL/scope authority, Meili as a recall accelerator" as a future path if we ever go there.
+
+Also mention pg_search (ParadeDB BM25 extension) as an emerging A+ option — can't install on Neon/Supabase managed tiers? Supabase supports pg_search (ParadeDB) as a preview? Supabase supports the paradedb extension; Neon: has pg_search beta? Not sure. Be cautious: mention as a monitored upgrade path within Option A ("BM25 inside Postgres via ParadeDB pg_search, subject to managed-provider availability"). That is a nice forward-looking touch that is honest about uncertainty. Keep short.
+
+Now — where do I write the file? Follow the repo convention: docs/course_materials/Chapter 5/Lesson 4/Exercise 2/phase2_architecture_adr.md. Naming: phase1 file is phase1_requirements_analysis.md and phase1_requirements_log.md. So phase2_architecture_adr.md fits. The user said "Final Output: provide a clear ADR." Write the file and give a summary of the key points in chat.
+
+Let me sanity-check a couple of facts I want to state:
+
+1. Postgres row comparison with NULLs: SELECT ROW(NULL,'x') < ROW(1,'a') → evaluates first element NULL < 1 → NULL (not false!)… actually row comparison: compares element-wise; if first elements are unequal, returns that comparison's result; NULL < 1 is NULL → the whole expression is NULL → filtered by WHERE. Wait: ROW(NULL, 'x') < ROW(1,'a'): first elements differ, so result = NULL < 1 = NULL. So yes, indeterminate → row dropped. So a naive row-value predicate on NULLable keys silently drops rows after a NULL cursor position (and also for rows with NULL v when compared against a non-NULL cursor, the predicate yields NULL → excluded — which actually coincidentally implements "NULL is after everything" in desc… but breaks NULLs-last in asc: in asc, NULL rows should come last too, and a predicate like due > cursor excludes NULL due → NULLs never appear on asc pages after the first → wrong. And the = case (NULL, id) < (NULL, cid) → NULL → excludes all subsequent NULL rows → duplicates/gaps. Hence sentinel COALESCE is the right fix.) My COALESCE±infinity analysis handles this. Good — I'll state this pitfall in the ADR: "the row-value < operator is three-valued under NULL — naive use either silently drops rows or violates NULLS LAST; fix by mirroring into the predicate the order-extreme sentinel that ORDER BY ... DESC NULLS LAST behaves as."
+
+2. uuid comparison in Postgres: uuid type has btree ordering — yes, comparable.
+
+3. '-infinity' timestamptz: supported literal in PG. Yes.
+
+4. websearch_to_tsquery('english','') returns empty tsquery, matches no rows — E4 handled by trimming at the route (treat as absent). Yes, PG11+; PG16 fine.
+
+5. GIN fastupdate pending-list: yes, default on; vacuum flushes; mention autovacuum tuning for the GIN-heavy table.
+
+6. Stored generated column on UPDATE: recomputed automatically — yes. But caveat: Prisma raw UPDATE ...  all fine. Note: Prisma prisma.task.update — search_vector is invisible in Prisma schema (it's added via raw SQL migration). No problem, already the case today.
+
+7. Meilisearch: no native Postgres source (they have a shim in meilisearch-python/rails sync tools; there's also a community meilisearch-synchronizer using logical decoding; ES has Debezium). Dual-write statement is fair.
+
+8. Elasticsearch free security: since 8.0, basic security (native realm, TLS, RBAC) free. My ops statement stands either way; keep it light.
+
+9. Algolia pricing model: per-record + per-operation. Yes, "Records" + "Operations" (searches are actions).
+
+10. Supabase supports ParadeDB pg_search — as of 2025 I think Supabase announced pg_search availability (their "extra extensions" allowlist includes paradedb/pg_search). Neon: I'm not sure about pg_search. Phrase it carefully: "available on some managed providers (e.g. Supabase lists ParadeDB extensions); check Neon support before counting on it."
+
+Also numbers for performance at scale 10k→1M: honest estimates:
+- 10k tasks: everything trivially <5ms (both A and B).
+- 1M tasks total, say 100-1000 workspaces: per-workspace slices are 1k-100k. PG with scope-leading plan + keyset: p95 for FTS within a slice in the tens of ms; ranking over all matches is the worst part; worst case a broad term in a single giant workspace with 500k matches: match + rank ≈ hundreds of ms → statement timeout + index fix + revisit triggers. ES at 1M docs: single node, sub-10ms; but sync lag.
+- Concurrent searchers 100: PG: each query is a few ms of CPU → trivial; ES: also fine. Differentiator is tail-latency protection via scope indexes.
+
+Also mention Postgres-native mitigations for the common-word explosion problem: websearch's AND semantics keeps selectivity; optionally pg_trgm for infix; optionally materialize ORDER BY rank LIMIT inside a CTE and join back (limit headline work). Good implementation note: compute rank+keyset in a narrow inner query selecting only ids (avoids wide-row sort), then join back for DTO — standard top-N optimization. I'll include this in the implementation strategy.
+
+ADR structure (MADR-ish):
+- Meta: title, status Proposed→Accepted, date 2026-11-08, deciders, depends on Phase 1 doc.
+- Context
+- Options considered (A, B1 ES, B2 Meili, B3 Algolia; + A' variants like ILIKE/trigram rejection, + rejected hybrid)
+- Decision drivers (weights: security/multi-tenancy correctness highest, NFR-P.1 target, team size/ops budget, sovereignty, UX freshness)
+- Analysis per driver across the four requested axes (precision/recall, ops complexity, performance at scale, cost/sovereignty) — use a comparison table + prose.
+- Decision: Option A with explicit scope.
+- Implementation strategy:
+  1. Query pipeline architecture (route → zod → membership → service → single parameterized SQL)
+  2. Single-source-of-truth sortExpr pattern; priority CASE mapping with ELSE 0
+  3. Keyset: row-value comparison + sentinel NULLS-LAST mirroring; cursor token format; direction operator flipping; relevance cursor caveats (rank as v; ties handled by id; E10 point-in-time)
+  4. Single reference SQL (complete, ready to paste) — include the whole query with filters, q, cursor.
+  5. Index plan (2 composite + btree_gin option + notes about projects(workspace_id), autovacuum/GIN pending list, statement_timeout, work_mem)
+  6. Snippet/sentinel escaping note
+  7. Testing & validation gates (8 acceptance items from Phase 1 + EXPLAIN check at 100k + cursor-walk property test)
+- Revisit triggers (concrete, measurable).
+- Consequences: positive; negative / accepted technical debt; risks with mitigation ladder.
+
+The reference SQL needs care. Let me draft it precisely.
+
+WITH matched AS (
+  SELECT
+    t.id,
+    <sortExpr> AS v,
+    ts_rank(t.search_vector, websearch_to_tsquery('english', $q)) AS rank  -- only if q
+  FROM tasks t
+  JOIN projects p ON p.id = t.project_id
+  WHERE p.workspace_id = $workspaceId
+    AND ($projectIds  IS NULL OR t.project_id = ANY($projectIds))
+    AND ($statuses   IS NULL OR t.status = ANY($statuses))
+    AND ($priorities IS NULL OR t.priority = ANY($priorities))
+    AND ($assigneeIsUnassigned OR t.assignee_id = $assigneeId OR t.assignee_id IS NOT DISTINCT FROM NULL AND $assigneeIsUnassigned)  -- cleaner: handled in JS: assigneeId==='unassigned' → `t.assignee_id IS NULL`; else `= $assignee`; else no clause
+    AND ($q IS NULL OR t.search_vector @@ websearch_to_tsquery('english', $q))
+    AND ($cursorId IS NULL
+         OR ( <sortExpr>, t.id ) < (<cursorV>, <cursorId>::uuid))   -- '<' for desc, '>' for asc
+  ORDER BY <sortExpr> DESC NULLS LAST, t.id DESC
+  LIMIT $limitPlus1
+)
+SELECT t.*, p.title AS project_title, u.id AS ..., m.rank, m.v, ts_headline(...) 
+FROM matched m JOIN tasks t ... JOIN projects p ... LEFT JOIN users u ...
+ORDER BY m.v DESC NULLS LAST, m.id DESC;
+
+Wait — subtle point on the cursor's row comparison: for NULL dueDate desc, the v computed via COALESCE sentinel; predicate (COALESCE(t.due,'-inf'), t.id) < ($cv, $cid). With $cv = '-inf'::timestamptz. Bind from cursor JSON v=null → JS binds the sentinel per direction, or SQL binds `COALESCE($cv, '-inf'::timestamptz). Cleaner: cursor stores the sentinel as ISO-ish? '-infinity' is a valid timestamptz input string, so we can bind the string '-infinity' directly. Simpler for the doc: cursor v is null for NULL-rows, and SQL binds COALESCE($cursorV::timestamptz, '-infinity'::timestamptz)` for desc. Careful though: for real-due rows, cursor v is real, no problem.
+
+Hmm, another subtlety: if cursorV is null but we COALESCE it with the sentinel, the predicate can't distinguish "no cursor" from "cursor at null" — use the $cursorId IS NULL guard to detect first page (cursorId always present with a cursor). Good.
+
+Also the CTE matched — LIMIT inside CTE with ORDER BY: Postgres allows LIMIT in a CTE; planner honors ordering+limit (top-N sort). Rejoin for DTO rows — avoids sorting wide rows including descriptions, and computes ts_headline only on the ≤101 surviving rows (perf: headline over all matches would be brutal; this is an important implementation insight, aligned with the R2 justification).
+
+For relevance sort: the cursor v = rank float. Re-ranking on subsequent pages is deterministic unless rows mutate; ties handled by id. Row comparison (rank, id) < ($cv, $cid) — rank is never null. Good. But the ts_rank output is float4 (real). Floats in JSON cursors: use enough precision (JS number → toString roundtrip is fine for comparisons, as long as it's the exact value re-bound… float4→double roundtrip preserves value; binding back as double and comparing with float4 expression: PG casts expression to float8? ts_rank returns real (float4). Row comparison (m.v, id) < (8::double, uuid) — v is float4, cursor value bound as double precision → comparison promotes float4→float8; float4→float8 is exact. OK — but I'll mention to cast in SQL: (<sortExpr>, t.id) < (<cursorV>::real, ...) or bind explicitly. Keep implementation note short: "cast the cursor value to the expression's type."
+
+Priority CASE: CASE t.priority WHEN 'urgent' THEN 4.0 ...? int is fine. Bind the cursor v as int: (caseexpr, t.id) < ($1::int, $2::uuid) — types: CASE returns integer. Good.
+
+Title sort: VarChar(200) collation-dependent ordering (likely C or en_US) — fine, deterministic. Cursor v = string; bind as text. Empty string edge? title min(1). Good.
+
+Also FR-4.3: cursor authority: decode cursor → use cursor.sortBy/sortOrder, compare against query's sortBy if present → mismatch 400.
+
+Rate limit, membership — reference only.
+
+Now, "technical debt accepted" section:
+1. Relevance ceiling (ts_rank, no typo/fuzzy/synonym; English-only unstemmed config hardcoded; no unaccent) — with mitigation ladder.
+2. Dual-index growth: two more btrees + GIN write amplification on task writes (insert-heavy board) — modest but real; GIN pending list + autovacuum.
+3. Search competes with OLTP on the same instance; no replica isolation yet → statement_timeout 2s on the search path (or per-service role), accept occasional 500s under pathological queries until revisit triggers; consider read replica later (Prisma datasource extension or separate read-only client).
+4. E10 point-in-time relevance drift across pages.
+5. Legacy GET /tasks stays live unscoped until deprecated — flagged as an existing defect this ADR does not solve but must not worsen (new endpoint is the sanctioned path; open follow-up R6).
+6. Prisma raw SQL escape hatch: search query lives in $queryRaw — schema drift risk if column renames; mitigated by typed row mapper + tests.
+7. Snippet sentinel/escape protocol is custom — tested.
+8. No faceted counts (spec forbids COUNT) — UI shows "more" not totals; product acceptable.
+
+Revisit triggers:
+- p95 > 300ms at 100k/workspace after index + query-plan work, or a single workspace > ~1M tasks.
+- Search quality support tickets: typo-tolerance demand, empty-result complaints from users with obviously-present terms (in-fix), non-English workspaces becoming material.
+- Requirement to index comments/attachments (cross-entity search) or search-driven analytics.
+- Then: pilot Meilisearch as a pure recall accelerator in front of Postgres? Note the architecture: Postgres remains the source of truth and ACL scope; engine returns candidate ids and PG re-filters by scope before rendering. Hmm — but that reintroduces a join; a cheap guard: WHERE id = ANY(candidateIds) AND workspace scope — a good design that bounds leak severity to recall, not permission. Present it as a preferred first step for Option B, or per-workspace Meili index. Keep brief.
+
+Also decision drivers/weights and per-axis comparison table: scoring A / B per axis.
+
+Length: comprehensive but tight. This is a document meant to be read. ~350-450 lines of markdown. The Phase 1 doc is 271 lines; matching depth is appropriate.
+
+Let me also double-check my claim about ts_rank vs BM25 and 'running'/'run' stemming: to_tsvector('english', 'running') → 'runn'? no: the english dictionary stems "running" → "run". Query websearch_to_tsquery('english','run') → 'run'. Matches. And prefix 'runn*' does not match 'run' stem — correct limitation statement: no partial-word matching beyond stems; infix is missing; typo is missing.
+
+unaccent: english config doesn't fold accents: "café" tokenizes 'café' as a single word; query "cafe" ≠. Mention in debt.
+
+GIN composite with btree_gin: CREATE INDEX ON tasks USING gin (project_id gin_trgm_ops) no — uuid needs btree_gin: CREATE EXTENSION btree_gin; CREATE INDEX ON tasks USING gin (project_id, search_vector); supported. Availability on managed PG: btree_gin is available on Supabase/Neon/RDS — yes, commonly allowlisted. Good — safe to recommend as a documented escape hatch.
+
+Also alternative scope strategy: push workspace_id onto tasks as a denormalized generated… can't be generated (not same-table). Trigger-based copy of workspaceId. In PG it's transactional (inside the DB, same statement), unlike an external engine's dual-write. Worth one line: "if the join shows up in EXPLAIN, the same-DB denormalization (trigger copying workspace_id to tasks, transactional, no external dual-write) is strictly cheaper than adopting an engine." Nice ADR-quality observation.
+
+Top-N sort memory: work_mem; note.
+
+Also check existing indexes for relevance-only sort: GIN → bitmap → fetches all matched → top-N sort by rank. With workspace filter: planner BitmapAnds project_id = ANY? hmm, with the join via projects… the predicate p.workspace_id = $1 is on projects; tasks is filtered by t.project_id IN (subselect/join). The planner will typically hash-join tasks (scanned via GIN bitmap for the tsquery) with projects filtered on workspace. At 1M total tasks, GIN matching across the whole table (not per-workspace!) is the real scaling concern: search_vector @@ tsq bitmap scans all matching rows globally, then the join filters by workspace. So a broad common-word query touches every match globally. btree_gin composite (project_id, search_vector)… but query is scoped by workspace→multiple project_ids… project_id = ANY(array) in gin scalar key: btree_gin supports array via @>?? btree_gin composite with scalar IN: can PG use a composite gin for scalar IN? It can via project_id = ANY → I think it's not usable (GIN scans need @@ or =? = is possible for scalar keys? actually btree_gin supports =, <>, <, >, <=, >=, and also… I'm not sure about IN/array for composite gin). Honest simplification for the doc: options when measured to be needed: (a) add a trigger-copy workspace_id to tasks + btree_gin (workspace_id, search_vector) for = scalar + @@ (works: workspace_id = $1 AND search_vector @@ tsq → BitmapAnd of the two components? For composite gin, equality on scalar key + @@ is usable — yes, when all keys are constrained, a composite GIN can be used, with scalar = and tsvector @@; for project_id = ANY it becomes an OR across keys → planner does multiple bitmap scans? uncertain → recommend the trigger-copy with workspace_id and =). (b) read from the replica with engine. Present (a) as "same-DB scaling move if EXPLAIN shows a cross-tenant GIN scan at 1M+; measure first." That's precise and honest about the uncertainty ("if EXPLAIN shows").
+
+Wait, but do we need a trigger? tasks.project_id exists and is on the table! Composite btree_gin (project_id, search_vector) with project_id = ANY(${projectIds}::uuid[])? Hmm, a workspace has many projects; without a projectId filter we don't know the list. We could resolve project ids first: SELECT id FROM projects WHERE workspace_id = $1 (cheap, indexed) then pass the array. Scalar key with = ANY(array) on btree_gin: does PG support col = ANY(array) against GIN? GIN supports array columns natively with && operator; for scalar keys with btree_gin's = ANY… I recall the planner treats x = ANY(arr) as an OR of x = v_i, and can do multiple index scans on the GIN (per scalar-key value)? Not sure if it does that for composite GINs. Rather than overclaim, the doc will present: resolve workspace → project id array in a cheap prior lookup (or use a join); indexes: composite btree for createdAt/updatedAt sort + btree for per-project scope + GIN for vector; scaling option: (project_id, search_vector) composite GIN via btree_gin, verified with EXPLAIN on the seeded dataset (validation gate, not blind trust). That's honest. And keep the trigger-copied workspace_id idea as the cleanest form: (workspace_id, search_vector) with =. Good.
+
+Also a simpler alternative for scoping without a join when needed: t.project_id IN (SELECT id FROM projects WHERE workspace_id=$1) — semi-join; planner handles fine.
+
+OK — one more: existing analysis.md in the repo root? There was analysis.md in root and in the Chapter 4 docs — root analysis.md might be about something else; not needed.
+
+Also the exercise said Phase 2 "discuss the architecture with a reasoning workspace using role setting" — user just wants an evaluation + ADR; deliver that. Save to Exercise 2 folder as phase2_architecture_adr.md, matching convention.
+
+Should I re-check phase1_requirements_log.md quickly to avoid contradictions (e.g. default sort with q = relevance)? It's the log; the analysis doc is the approved summary. Enough context. Might grep the log for any architecture-considered notes already present… phase 1 is requirements, not architecture. Skip — but a glance at any statements about search engines that the ADR should inherit… the analysis mentions the exercise asks to evaluate PG vs external engine. Fine.
+
+Let me also decide the status of the ADR: "Accepted" — the user wants "the chosen path." Choose Option A: Integrated PostgreSQL. Mark "Accepted (2026-11-08)."
+
+Cursor token format: base64url(JSON). Include v and id and sort meta. Type-tagged per sortKey for validation: cursor schema v: number|string|null already in the spec. Note: validate cursor against the resolved sortKey's type (relevance/priority → number; dueDate/createdAt/updatedAt → ISO date string or null; title → string).
+
+One more correctness check on ORDER BY ... DESC NULLS LAST, t.id DESC for the direction flip "FR-3.4 id <dir>": yes, id follows same direction as primary. Predicate operator: desc → <, asc → >. Good.
+
+Also mention: LIMIT $limitPlus1 binds limit + 1.
+
+And hasMore/nextCursor derivation in service: slice to limit, cursor from last row's (v, id); v serialization: dates → ISO string via Date.toISOString (timestamptz row values come back as Date objects in Prisma raw… Prisma.$queryRaw returns Date for timestamptz — yes), rank → number, priority rank int → number.
+
+Sentinel for the nextCursor from -infinity COALESCE'd? If we SELECT the COALESCE'd expression, we get Date = -Infinity JS? Prisma maps infinity timestamps to… Date objects with infinite time value in JS (the Date constructor can't hold infinity; Postgres's -infinity comes back as Date with time -8640000000000000? The pg driver maps to Date(-Infinity)?? node-postgres maps infinity to a Date with ±Infinity ms value, which is Invalid Date… hmm actually pg maps to Infinity handling: returns a date with time value Infinity? Not going to get tangled: better approach — SELECT both the raw column AND the coalesced sort expression for ORDER, but encode the cursor from the raw value: if raw is null → v=null; the predicate re-coalesces the bound parameter. That's the clean design: cursor v mirrors the raw value (null allowed per the spec's cursor schema — v: union(number,string,null).nullable()), and SQL binds COALESCE(${cursorV}::timestamptz, '-infinity'::timestamptz) per direction. ORDER BY uses the same coalesced expression as predicate. SELECT can either return is_null flag + raw for cursor building, or simply return raw t.* and let JS read dueDate directly (already in the DTO). Yes — DTO rows already carry the raw field; cursor v for dueDate = raw dueDate ISO or null.
+
+Good: the sentinel never crosses the API boundary; it's internal to the SQL. Elegant — I'll document that.
+
+For a "NULLS LAST in both directions" edge with an asc query where the cursor is at a NULL dueDate row: v=null, $cv null → coalesce to +infinity (asc sentinel) → predicate (coalesce(due, +inf), id) > (+inf, cid) → rows with NULL due and id>cid (correct: NULL is last in asc, and id tiebreak continues), rows with real due < +inf → excluded. Correct.
+
+For desc: sentinel -infinity. Correct as above.
+
+Relevance v: ts_rank result — can be 0 (and is often exactly 0). Cursor binds ::real. Float8→float4 cast from the bound parameter: the parameter is text → cast to real, exact representation? Text→real conversion rounds to nearest float4; the original rank was float4, output via PG to text (node returns JS number from float4 exactly, toString roundtrips → parse-back-to-float4 = same bit pattern). Roundtrip safe. No note needed… maybe a one-liner. Skip to avoid bloat. Hmm, JS Number(float4) is exact; String() roundtrip via shortest roundtrip repr is also exact; PG's text→real parse is round-to-nearest → same value. Safe.
+
+Now for axis 1 "retrieval precision and recall: how does each handle the Priority mapping and Workspace scoping requirement" — the user explicitly asked to treat these in the analysis. Priority mapping in B: needs sortable numeric attribute → priority_rank in the document at index time (same CASE, moved to write path; drift risk if mapping evolves). Workspace scoping in B: denormalized workspace_id filter attribute, or per-workspace index; ACL evaluated inside engine = permission decisions made outside the system of record; stale index → leak risk. Actually with filter on workspace_id, a missing field = filter excludes (fail closed) — with numeric-field filter on missing attribute: Meili treats missing as no match → fail closed; ES term filter missing → no match → fail closed. So B fail-closes on leakage with that document missing workspace_id… but the leak vector is more subtle: wrong/missing scope only drops results; leaks would come from applying the wrong filter value, e.g. code bug where workspace filter is skipped → all tenants returned. In PG the join makes the scope structural — same enforcement as authorization layer. Good nuance for the ADR.
+
+For A's workspace scoping: also structural within SQL — but same code-bug risk (forget the join) exists; mitigation identical: single query builder, tests, no raw other paths. Fair note: neither is magically safe; A keeps enforcement in one place with zero data duplication; B has it in two places (index + query).
+
+Priority sort in A within the relevance mode? Sort is single-key per the spec — priority sort is standalone. Fine.
+
+Time to also reflect NFR-P.1 numbers in the performance section with an honest table:
+
+| Scale point | A (PG) | B (engine) |
+|---|---|---|
+| 10k tasks | ~1-5ms warm, both trivially | same |
+| 1M total, 10-100 workspaces, typical scoped query | GIN bitmap + scope filter; top-N; tens of ms p95; keyset pages O(limit) | sub-10ms; sync lag 1-5s on edits |
+| 1M, single mega workspace, broad terms | risk: cross-tenant global bitmap; mitigations measured (composite gin / workspace column) — can hit the 300ms budget on worst-case common-word queries | fine |
+| 10M+ | needs serious work, replica | native comfort zone |
+
+Also mention: B's ingest becomes the bottleneck for writes at scale (every status change on a board drags → high update rate; ES near-real-time refresh 1s; Meili is async). For board apps, write:read ratio for mutations is high (status moves), so B pays an ingest tax continuously.
+
+And "100 concurrent searchers" NFR: A: fine; but each connection from shared pool — NFR-P.5 pooled client; recommend pool sizing + PgBouncer at prod scale.
+
+Cost numbers: A: $0 incremental infra. Meili single VM: ~$15-40/mo + ops time. ES: 3× data nodes ~$300-1200/mo + ops. Algolia ~$1.25-3/1k records + ops… their pricing: Build free 10k records; Grow from ~$500/mo. At 1M records: ~$2-4k+/mo tier. I'll give ranges with a "verify latest pricing" hedge, or just qualitative (small/medium/large). Qualitative with one rough number is safer than precise fabricated pricing. Do qualitative + a ballpark.
+
+Sovereignty: data never leaves the boundary (A); vendor custody (Algolia); self-hosted (B1/B2) preserves sovereignty but adds a second data store to secure (encryption at rest config, backups, GDPR deletion paths twice).
+
+Now let me write the file. Path: docs/course_materials/Chapter 5/Lesson 4/Exercise 2/phase2_architecture_adr.md.
+
+I'll keep the ADR structured with numbered sections. Include the reference SQL. Let me carefully compose the final SQL fragment in TypeScript-style with Prisma.sql building blocks — since that's the implementation language.
+
+The full reference query (all params present, sortBy=relevance):
+
+const rows = await prisma.$queryRaw<SearchRow[]>(Prisma.sql`
+  WITH page AS (
+    SELECT
+      t.id,
+      ts_rank(t.search_vector, websearch_to_tsquery('english', ${q})) AS sort_v
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE p.workspace_id = ${workspaceId}
+      AND (t.project_id = ANY(${projectIds}::uuid[]) OR ${projectIds} IS NULL)
+      ...
+      AND t.search_vector @@ websearch_to_tsquery('english', ${q})
+      AND (${cursorId}::uuid IS NULL
+           OR (ts_rank(t.search_vector, websearch_to_tsquery('english', ${q})), t.id)
+              < (${cursorV}::real, ${cursorId}::uuid))
+    ORDER BY ts_rank(t.search_vector, websearch_to_tsquery('english', ${q})) DESC, t.id DESC
+    LIMIT ${limit + 1}
+  )
+  SELECT t.*, p.title AS "projectTitle", u.id AS "assigneeId"...,
+         pg.rank, ts_headline(...)
+  FROM page pg
+  JOIN tasks t ON t.id = pg.id
+  JOIN projects p ...
+  LEFT JOIN users u ON u.id = t.assignee_id
+  ORDER BY pg.sort_v DESC, pg.id DESC
+`)
+
+Hmm the projectIds IS NULL parameter: Prisma binding of null arrays is tricky (${projectIds ?? []}::uuid[] with empty → use cardinality()=0? Standard trick: ${list === null ? Prisma.empty : Prisma.sqlAND t.project_id = ANY(${list}::uuid[]))} — build conditional fragments in TS with Prisma.sql, like existing code (taskService.ts:161) does. Show the conditional-fragment pattern to match repo conventions.
+
+Filter fragments in TS:
+
+const conds = [Prisma.sql`p.workspace_id = ${workspaceId}`];
+if (projectIds)   conds.push(Prisma.sql`t.project_id = ANY(${projectIds}::uuid[])`);
+if (statuses)     conds.push(Prisma.sql`t.status = ANY(${statuses}::text[])`);
+if (priorities)   conds.push(Prisma.sql`t.priority = ANY(${priorities}::text[])`);
+if (assignee === 'unassigned') conds.push(Prisma.sql`t.assignee_id IS NULL`);
+else if (assignee) conds.push(Prisma.sql`t.assignee_id = ${assignee}::uuid`);
+if (q)            conds.push(Prisma.sql`t.search_vector @@ websearch_to_tsquery('english', ${q})`);
+if (cursor)       conds.push(Prisma.sql`(${sortExpr}, t.id) ${dir === 'desc' ? Prisma.sql`<` : Prisma.sql`>`} (${cursorVTyped}, ${cursor.id}::uuid)`);
+
+sortExpr table with a Prisma.sql constant per direction where NULL handling applies (only dueDate differs):
+
+const SORT: Record<SortKey, (q: string | null, dir: Dir) => Prisma.Sql> = {
+  relevance: (q) => Prisma.sql`ts_rank(t.search_vector, websearch_to_tsquery('english', ${q!}))`,
+  createdAt: () => Prisma.sql`t.created_at`,
+  updatedAt: () => Prisma.sql`t.updated_at`,
+  dueDate: (_, dir) => dir === 'desc'
+    ? Prisma.sql`COALESCE(t.due_date, '-infinity'::timestamptz)`
+    : Prisma.sql`COALESCE(t.due_date,  'infinity'::timestamptz)`,
+  priority: () => Prisma.sql`CASE t.priority WHEN 'low' THEN 1 WHEN 'medium' THEN 2
+                      WHEN 'high' THEN 3 WHEN 'urgent' THEN 4 ELSE 0 END`,
+  title: () => Prisma.sql`t.title`,
+};
+
+Cursor value binding per key: relevance ${v}::real, createdAt/updatedAt ${new Date(v)}::timestamptz, dueDate COALESCE(${v ? new Date(v): null}::timestamptz, sentinel) — wait the sentinel for a null cursor: the predicate value has to also be coalesced: (expr) > (COALESCE($cv::timestamptz,'+inf'), $cid). Yes, same sentinel per direction. priority ${v}::int, title ${v}::text.
+
+ORDER BY: <sortExpr> ${dir} NULLS LAST, t.id ${dir}. Note: since dueDate sortExpr already has sentinel, NULLS LAST is moot for it, but keep it for uniformity (harmless).
+
+Relevance: ts_rank cannot be NULL. Title not null. createdAt/updatedAt not null. So only dueDate needs the sentinel.
+
+I think the ADR is well formed. Also "single query" is answered: sort expression defined once, reused in SELECT/ORDER BY/predicate; the page CTE keeps top-N narrow; join back for DTO + headline.
+
+Also validation gates: EXPLAIN on a 100k seeded dataset, full-walk property test, isolation test.
+
+Also a statement_timeout / per-query guard: SET LOCAL statement_timeout = '2s' inside a transaction? Prisma: run SET LOCAL… simpler: telemetry + pool config. One bullet.
+
+Also decide if I include an "Options considered" scoring table with weights per axis. Yes, concise.
+
+Also mention rejected alternatives: pure ILIKE (Phase 1's E3 already rejects), Postgres + Redis cache layer (doesn't fix recall, adds invalidation), and hybrid later pilot.
+
+Chat reply: summary + pointer to the file. Keep chat reply moderately brief: decision, per-axis one-liner, key implementation points, risks. The doc carries the detail.
+
+Line length/quality: aim for ~400 lines. Write file with write.
+
+One more check — "Supabase/Neon" is mentioned in the README (free cloud tier). Managed PG constraint is relevant to A: no superuser → extensions limited (btree_gin and pg_trgm available on both; ParadeDB pg_search: Supabase yes (I think in their "extra extensions" list), Neon: unsure → phrase as "verify provider support"). Fine.
+
+Also honest note: the generated column is stored → write amplification on every title/description update (lexize cost) — not a problem at board scale; already the status quo (existing), so not new debt.
+
+Now let me write the doc.
+
+All the necessary information is now in place. The decision-making axes are grounded in specific information: the approved Phase 1 spec (GET /workspaces/:workspaceId/tasks/search, tsvector + GIN migration, priority mapping for VarChar, keyset pagination requirements, p95 ≤ 300ms @ 100k/workspace), Postgres 16 as the only existing piece of infrastructure (devcontainer compose), and the stack as described in the README (Prisma/Express, Supabase/Neon tier).
+
+Now I'm going to write the ADR into the Exercise 2 folder, following the existing Phase 1 naming convention:
+# Wrotedocs\course_materials\Chapter 5\Lesson 4\Exercise 2\phase2_architecture_adr.md
+# Phase 2: Architecture Decision Record — Search Engine for Advanced Task Search
+
+**ADR-001:** Use integrated PostgreSQL full-text search (Option A) for `GET /workspaces/:workspaceId/tasks/search`
+**Date:** November 8, 2026
+**Status:** Accepted
+**Deciders:** Backend / platform (capstone Exercise 2, Phase 2)
+**Depends on:** `phase1_requirements_analysis.md` (approved requirements), `authenticate` JWT middleware (blocker, external to this decision)
+**Alternatives considered:** Elasticsearch, Meilisearch, Algolia (Option B family); ILIKE + trigrams; Postgres + cache tier
+
+---
+
+## 1. Context
+
+TundraBoard must ship workspace-scoped task search: FTS over `title`/`description`, composable
+`status`/`priority`/`assigneeId`/`projectId` filters, six sort keys including `relevance` and a
+mapped `priority` rank, and cursor (keyset) pagination — under p95 ≤ 300 ms at 100k tasks per
+workspace with 100 concurrent searchers (Phase 1 NFR-P.1).
+
+The current estate:
+
+- **PostgreSQL 16** is the only stateful service (`.devcontainer/docker-compose.yml`; README names
+  Supabase/Neon free tiers as hosting). Postgres is the **system of record** for a multi-tenant
+  dataset where workspace membership is the security boundary.
+- **FTS infrastructure already ships**: `search_vector tsvector GENERATED ALWAYS ... STORED`
+  (title → weight A, description → weight B, English config), GIN index `tasks_search_vector_idx`,
+  and `listTasks` already parses with `websearch_to_tsquery` (`20261020000000_add_full_text_search`).
+- **Tenancy is relational**: `tasks` has no `workspace_id` column; scope exists only via
+  `tasks.project_id → projects.workspace_id` (Phase 1 §1.2 finding 1). Every search query must
+  scope through `projects`.
+- Team is small; the repo adds dependencies only via Prisma/Express/Zod conventions. No existing
+  queue, worker, or CDC infrastructure.
+
+This ADR decides **Option A (integrated Postgres)** vs **Option B (external search engine)**,
+evaluated on four axes: retrieval precision & recall (with focus on the *priority mapping* and
+*workspace scoping* requirements), operational complexity (deploy, dual-write, maintenance),
+performance as task count grows 10k → 1M, and cost & sovereignty.
+
+---
+
+## 2. Decision drivers (weighted)
+
+| # | Driver | Weight | Why it's weighted this way |
+|---|---|---|---|
+| D1 | Multi-tenant correctness of workspace scoping | **Critical** | A leak is a security incident; Phase 1 makes scope a *structural* property of the endpoint (NFR-S.1) |
+| D2 | Meeting NFR-P.1 (p95 ≤ 300 ms @ 100k/ws) | High | Hard requirement, but a *known, modest* target |
+| D3 | Operational surface a small team can own | High | No dedicated search/infra team; the app must not acquire systems it can't operate |
+| D4 | Data freshness for board UX | Medium | Users search immediately after editing; stale index = visible bug |
+| D5 | Relevance quality (typos, partial words) | Medium | Nice-to-have; Phase 1 explicitly deferred trigram/fuzzy to v2 (v2 candidates §5) |
+| D6 | Cost & sovereignty | Medium | Customer task data is tenant IP; residency/GDPR deletion must stay simple |
+
+---
+
+## 3. The alternatives
+
+| Option | What it means here |
+|---|---|
+| **A — Integrated PostgreSQL FTS** | Build on the existing tsvector generated column + GIN index + `websearch_to_tsquery`. New: one parameterized search query, composite sort indexes, cursor codec. |
+| **B1 — Elasticsearch (self-hosted)** | Dedicated cluster; app or CDC writes documents; engine enforces scope via a denormalized `workspace_id` field. |
+| **B2 — Meilisearch (self-hosted)** | Lightweight single-binary engine; typo-tolerant, great DX; still requires an index pipeline. |
+| **B3 — Algolia (SaaS)** | Fully managed relevance engine; pay per records + operations; data leaves our estate. |
+| A′ — `ILIKE` + `pg_trgm` only | Rejected by Phase 1 (E3): the sanctioned search path is the tsvector column; ILIKE has no ranking and no stemming. |
+| A″ — Postgres + Redis cache in front | Rejected: caching doesn't improve recall/precision, and invalidation re-creates a mini dual-write problem. |
+
+---
+
+## 4. Analysis by axis
+
+### 4.1 Retrieval precision & recall
+
+**Workspace scoping (the requirement, not just a filter).**
+
+- **A:** scope is enforced *where the data's relationships live*. The query joins
+  `tasks → projects` and predicates `p.workspace_id = $1` in the same `WHERE` that paginates, in
+  the same transaction, against the authoritative data. There is no copy of the relationship to go
+  stale, and forgetting the join is caught by a single review surface (the one query builder).
+- **B:** scope must be **denormalized into the index** — every document carries `workspace_id`
+  written from a join at ingest time, and the engine filter is trusted for ACL. Failure modes are
+  new and specific: a pipeline bug writes a document with a missing/wrong `workspace_id`
+  (filters fail closed — no leak, but *silent missing results* that look like the leak's twin);
+  or the query path forgets the filter and returns cross-tenant rows with no relational guard rail
+  behind it. Permission decisions move into a second system that only has whatever copy of the
+  ACL truth we feed it. On the "404 indistinguishable" contract (NFR-S.2): nothing here changes
+  it — membership is still checked before any search — but B widens the *distance* between
+  authorization code and the code that actually selects rows.
+
+**Priority mapping (`low < medium < high < urgent`, never lexicographic).**
+
+- **A:** one expression does it — `CASE t.priority WHEN 'low' THEN 1 ... 'urgent' THEN 4 ELSE 0 END`.
+  `ELSE 0` also implements E12: unknown stored values (webhook writes bypass Zod) sort deterministically
+  instead of 500-ing. The mapping lives *next to the column it sorts*, in the same reviewable file as the sort.
+- **B:** the engine cannot sort by a string mapping either — you must index a numeric
+  `priority_rank` onto each document at ingest. Same `CASE`, relocated to the *write path*, so any
+  future remapping ("drop medium? reorder tiers?") becomes a **reindex of all tenants** instead of
+  a one-line query change. Strictly worse for this requirement.
+
+**Relevance quality.**
+
+- **A:** `websearch_to_tsquery` is operator-tolerant and never throws (junk input can't 500 or leak
+  SQL semantics), AND-of-terms matches search-box expectation; the A/B weighting makes title hits
+  outrank description hits via `ts_rank`. Ceiling: `ts_rank` is a simple TF/IDF-family score (not
+  BM25), English stem dictionary only, **no typo tolerance, no infix matching** (`tundr` ✗
+  `tundraboard`), no accents folding (`café` ≠ `cafe`), no synonyms.
+- **B (Meili/ES/Algolia):** typo tolerance, prefix/infix, better ranking models, faceting.
+  Real advantage — **and the spec deliberately buys it back** by scoping fuzzy/trigram to v2.
+  The app compensates for `ts_rank`'s coarseness *behaviorally*: board users disambiguate with
+  status/priority/assignee filters and re-sort by date, and E6's id-tiebreaker makes
+  rank-tie groups deterministic and page-stable.
+
+**Freshness (recall on content the user just changed).**
+
+- **A:** the STORED generated column recomputes inside the same transaction as the row update —
+  search sees an edit the instant it commits. Zero staleness, by construction.
+- **B:** async ingest → 0.5–10 s typical lag; worse under backlog. For a board where "rename card,
+  find card" is a normal interaction, this is a visible defect class we'd have to design around.
+
+**Verdict:** B wins raw text-relevance; **A wins decisively on the two named requirements** —
+scoping is structural rather than duplicated into an index, and the priority mapping stays a
+query-side one-liner instead of an indexed attribute requiring reindex-on-change. A also wins
+freshness. D5 (relevance polish) is the only axis B leads, and Phase 1 already deferred it.
+
+### 4.2 Operational complexity
+
+**A:**
+
+- **Zero new services.** Devcontainer, CI, staging, prod unchanged. No new credentials, network
+  paths, dashboards, or incident types.
+- **The dual-write problem does not exist.** Index sync is the database's own write path
+  (generated column, transactional). There is no second store to keep consistent, no "search says
+  X, DB says Y" state to debug.
+- Maintenance is ordinary Postgres: autovacuum on a table with a GIN index (pending-list flush via
+  `fastupdate`; occasional bloat), the two composite indexes from NFR-P.2, `statement_timeout` on
+  the search path. All of this is already on the team's critical path because Postgres must be
+  run regardless.
+- Schema coupling: the search query is raw SQL referencing physical columns (`t.search_vector`
+  isn't in the Prisma schema). Risk is rename-drift; mitigated by typed row interfaces + the
+  acceptance test suite that runs against a real DB.
+
+**B:** the *entire section-5-of-Phase-1 concern list multiplies by a second system*:
+
+- **Ingest pipeline** — pick one, none is free:
+  1. App-level dual-write: write task, then engine → partial failure = permanent drift; needs
+     retry queue + scheduled reconciliation sweeper. (Board apps have *high mutation rates* —
+     status drags make this the worst possible write mix to dual-write.)
+  2. Transactional outbox + worker: correct, but adds a queue/worker to operate (new subsystem in
+     a repo that has none today).
+  3. CDC/logical decoding (Debezium-class): the heaviest option, effectively infra-team work.
+- **Topology & versioning:** ES = JVM heap sizing, shard/mapping management, rolling upgrades,
+  reindex-on-schema-change rituals; Meili = simpler, but its embedded database and snapshot format
+  still pin upgrade paths; Algolia = no servers, but index/settings become code you version against a vendor API.
+- **Tenancy plumbing:** one index with a `workspace_id` filter (every query must remember it — see
+  4.1) vs per-workspace indexes (thousands of tenants → index explosion + tenant lifecycle
+  events: create/pause/**delete** all become dual-system operations).
+- **Two deletion/backup paths** (see 4.4).
+
+**Verdict:** A adds one query builder, one cursor codec, two indexes. B adds a stateful second
+system whose core failure mode (drift) is invisible until a user reports it. D3 alone is close to
+dispositive for A.
+
+### 4.3 Performance at scale (10k → 1M tasks)
+
+The NFR target is **per workspace** (100k tasks/ws). What each option does as *total* corpus grows:
+
+| Scale point | A (Postgres) | B (engine) |
+|---|---|---|
+| 10k tasks total | Warm queries single-digit ms. GIN bitmap scan → top-N sort → `LIMIT n+1`. Nothing to optimize. | Sub-ms. Both trivially inside budget. |
+| 1M total, spread across many workspaces | The query shape decides. With scope-first filtering (`p.workspace_id`, or a `project_id = ANY(...)` semi-join from the cheap indexed `projects.workspace_id` btree) plus `tasks(project_id, ...)` composites, work per query is bounded by the *matching set within one workspace*, not the corpus. Typical board queries (term + filters, ≤100 returned, no COUNT) hold well under 300 ms p95. Keyset pages are O(limit) regardless of depth (E15). | Single node, sub-10 ms at 1M. Comfortable — but the *ingest* side (every drag = one doc update, refresh cadence) is the load at 1M, not query time. |
+| 1M in few giant workspaces / very broad terms (e.g. `a`) | Known pressure points, in order: (1) a global GIN bitmap over common-word posting lists before scope filtering; (2) `ts_rank` computed over *all* matches to sort; (3) `ts_headline` per returned row. Mitigations, all in-database and measured before adopted: narrow `websearch_to_tsquery` AND-semantics; composite GIN `(project_id, search_vector)` / `(workspace_id, search_vector)` via `btree_gin`; same-DB denormalization of `workspace_id` onto `tasks` via trigger (transactional — *not* the external dual-write of B); `page`-CTE pattern (§5.4) so top-N sorts only ids+ranks; `statement_timeout` as the backstop. This is where A genuinely works for it. | Native comfort zone. |
+| 10M+ / cross-entity corpora (comments, attachments) | Needs serious tuning or read replicas; search traffic competes with OLTP on one instance. | This is B's raison d'être. |
+
+Write amplification: every `tasks` write already lexizes the STORED vector (existing cost, not new);
+B *adds* the engine on top. At 1M tasks, A's honest worst case is tail-latency on pathological
+queries — bounded by `statement_timeout` and revisited via §7 triggers. B's honest worst case is
+pipeline lag/backlog — bounded by nothing except more infra.
+
+**Verdict:** up to and beyond the 1M horizon in scope, A meets D2 with a concrete,
+in-database mitigation ladder; B's performance headroom is real but buys throughput we don't
+need at a tax we'd pay forever.
+
+### 4.4 Cost & sovereignty
+
+| | A | B1 ES | B2 Meili | B3 Algolia |
+|---|---|---|---|---|
+| Incremental infra | **$0** (same instance) | VMs/cluster + snapshots (meaningful $ + ops time) | 1 small VM + storage | SaaS, per-record + per-operation; grows with corpus & traffic |
+| Where tenant data lives | One Postgres instance | Two systems (DB + index) | Two | **Vendor custody** — DPAs, sub-processors, export control |
+| Tenant deletion / GDPR | `DELETE` on workspace cascades; one authoritative purge; backup = pg_dump/PITR | Purge DB **and** index; a missed purge = data-subject retention violation; two backup mechanisms | same | vendor API purge + export agreements |
+| Lock-in | Postgres — already chosen irreversibly (Prisma datasource, system of record) | ES query DSL & mapping | Meili settings/API | Deepest: relevance config, client SDKs, no self-host parity |
+
+**Verdict:** A is the only option where "delete this workspace" and "back this up" stay single-step.
+B3 additionally fails D6 on principle for a multi-tenant product whose customers are the kind of
+orgs that ask where their task data is; B1/B2 keep sovereignty but at the two-stores tax above.
+
+### 4.5 Score summary (weights §2)
+
+| Axis | A | B | Decisive reason |
+|---|---|---|---|
+| Precision & recall (as *specified*, incl. priority + scoping) | **wins** | | Scope structural; priority mapping query-side; zero staleness |
+| Relevance polish (as *aspirational*) | | **wins** | typo/infix/BM25 — explicitly v2-scoped |
+| Operational complexity | **wins by far** | | No dual-write, no new system |
+| Performance at scale (to 1M) | pass | pass | Both meet D2; B's headroom unneeded at this horizon |
+| Cost & sovereignty | **wins** | | $0 incremental, single data boundary |
+
+---
+
+## 5. Decision: Option A — integrated PostgreSQL search
+
+Build `GET /workspaces/:workspaceId/tasks/search` on the existing `search_vector` generated
+column, GIN index, and `websearch_to_tsquery`, as a single parameterized query in
+`taskService.ts`. **Adopt no external engine.** Revisit only via the triggers in §7.
+
+### 5.1 Why — the reasoning chain
+
+1. **The requirements' two hardest points are relational, not textual.** Workspace scoping rides a
+   join, priority mapping rides a `CASE`. Postgres does both *in the one query that must do them*
+   (NFR-S.1 requires scoping "applied in the SQL WHERE clause before pagination" — external
+   engines can't satisfy that sentence without re-importing the join).
+2. **The dual-write problem the spec never mentions is the one B would add.** A's index freshness
+   is transactional by construction; any B pipeline makes "search results vs board reality"
+   drift a permanent, silent failure mode operated by a team of D3's size.
+3. **The performance bar is workspace-bounded.** 1M tasks spread across tenants is ~100k per
+   workspace *worst case*; keyset pagination + scope-first filtering + no COUNT keeps per-query
+   work proportional to the slice and the page, not the corpus. B's headroom is paid for upfront
+   and used at the horizon where we'd also want replicas anyway.
+4. **Single data boundary.** One store = one purge, one backup, one residency story, $0 marginal
+   infra — for the product's *security-critical* axis (tenant isolation), fewer authorities is a
+   safety property, not just a preference.
+5. **The relevance gap B would fill is already scheduled as v2 scope** (trigram/fuzzy were
+   explicitly cut), and A keeps a cheap partial answer in-database
+   (`pg_trgm` + FUSE/TrigramSimilarity, ParadeDB `pg_search` BM25 where the managed provider
+   allows it — verify Supabase/Neon extension availability before counting on it).
+
+### 5.2 Implementation strategy — sort expression: one source of truth
+
+The root cause of every "cursor desynced from ORDER BY" bug is defining the sort twice. We define
+it **once**, as a server-side allowlist of `Prisma.sql` fragments, and splice the *same fragment*
+into `SELECT`, `WHERE` (keyset), and `ORDER BY`:
+
+```ts
+type Dir = "asc" | "desc";
+const SORT_EXPR: Record<SortKey, (q: string | null, dir: Dir) => Prisma.Sql> = {
+  // q's presence validated earlier (FR-3.2); never client text below — all ${...} are bound params
+  relevance: (q) => Prisma.sql`ts_rank(t.search_vector, websearch_to_tsquery('english', ${q!}))`,
+  createdAt: () => Prisma.sql`t.created_at`,
+  updatedAt: () => Prisma.sql`t.updated_at`,
+  // dueDate is the ONLY nullable sort key (title/status/priority/created/updated are NOT NULL;
+  // CASE and ts_rank never return NULL). Sentinel makes NULL behave as "sorts last"
+  // for BOTH directions, exactly mirroring `ORDER BY ... NULLS LAST` (FR-3.5, E7).
+  dueDate: (_, dir) => dir === "desc"
+    ? Prisma.sql`COALESCE(t.due_date, '-infinity'::timestamptz)`
+    : Prisma.sql`COALESCE(t.due_date,  'infinity'::timestamptz)`,
+  // E11 + E12: explicit rank; unknown stored values → 0 → deterministic, no 500
+  priority: () => Prisma.sql`CASE t.priority
+                  WHEN 'low' THEN 1 WHEN 'medium' THEN 2
+                  WHEN 'high' THEN 3 WHEN 'urgent' THEN 4 ELSE 0 END`,
+  title: () => Prisma.sql`t.title`,
+};
+```
+
+`sortBy` comes from Zod → validated enum → this table lookup only; no client string ever reaches SQL text.
+
+### 5.3 Implementation strategy — the cursor tiebreaker, in one query
+
+**Keyset predicate = row-value comparison against the same fragment.** For `desc`
+(`<` for `asc`), with `id` as final tiebreaker in the same direction (FR-3.4, E6):
+
+```
+( <SORT_EXPR>, t.id ) < ( <cursorV cast to expr's type>, <cursorId>::uuid )
+```
+
+Three properties make this exactly correct:
+
+1. **Lexicographic row comparison mirrors the composite ORDER BY** — first the sort value, ties
+   resolved by `id`. `uuid` has btree ordering in Postgres, so `id` comparison is total. (Note:
+   this is byte-order, not insertion-order — fine; only *determinism* is required.)
+2. **NULL-safe by the sentinel, not by luck.** Row-value `<` is three-valued under NULL
+   (`ROW(NULL,'x') < ROW(1,'a')` → NULL → row silently vanishes), which would break pages over
+   NULL `dueDate` (E7/E8). Because `NULLS LAST` means NULL behaves as the extreme of the order,
+   `COALESCE(due_date, ±infinity)` maps that behavior onto the comparison. The sentinel never
+   crosses the API boundary: the cursor encodes the *raw* value (`v: null` for a NULL row, per
+   §4.2 cursor schema), and SQL re-coalesces the bound parameter (`COALESCE(${v}::timestamptz,
+   '-infinity'::timestamptz)`).
+3. **Relevance ties are the norm, and are handled.** `ts_rank` returns float4 and ties heavily
+   (often exactly 0.0); `id DESC` after it gives the total order that makes page walks gap- and
+   duplicate-free (E6). Rank recomputes per page — under concurrent edits a row can move between
+   pages; that's E10's accepted point-in-time semantics, not a bug.
+
+Cursor token: base64url(`{sortBy, sortOrder, v, id}`), decoded → strict Zod (E9) → `sortBy`/`sortOrder`
+must match the query string (FR-4.3 → 400). `v` is re-cast per key: `::real` (relevance),
+`::int` (priority), `::timestamptz` (dates), `::text` (title). A malformed cursor is a 400, never
+a 500, and never interpolated.
+
+### 5.4 Reference query (the `page`-CTE pattern)
+
+All params present (`q` set, `sortBy=relevance`, `desc`, cursor, filters), illustrative:
+
+```ts
+const rows = await prisma.$queryRaw<TaskSearchRow[]>(Prisma.sql`
+  WITH page AS (                       -- narrow: ids + sort value only → cheap top-N
+    SELECT
+      t.id,
+      ${sortExpr} AS v                 -- SAME fragment, bound once here
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE p.workspace_id = ${workspaceId}                    -- NFR-S.1, structural
+      AND ${filterConds}                                     -- composed Prisma.sql fragments:
+      --   t.project_id = ANY(${ids}::uuid[])   (pre-validated against workspace, R1)
+      --   t.status     = ANY(${statuses}::text[])
+      --   t.priority   = ANY(${priorities}::text[])
+      --   t.assignee_id = ${assignee}::uuid  |  t.assignee_id IS NULL   (E13)
+      AND t.search_vector @@ websearch_to_tsquery('english', ${q})
+      AND (${cursorId}::uuid IS NULL OR
+           (${sortExpr}, t.id) < (${cursorV}::real, ${cursorId}::uuid))
+    ORDER BY ${sortExpr} DESC NULLS LAST, t.id DESC
+    LIMIT ${limit + 1}                 -- R2 over-fetch; no COUNT(*) (NFR-P.3)
+  )
+  SELECT t.*, p.title AS "projectTitle", u."displayName" AS "assigneeName", pg.v AS "sortV"
+  FROM page pg
+  JOIN tasks t     ON t.id = pg.id
+  JOIN projects p  ON p.id = t.project_id
+  LEFT JOIN users u ON u.id = t.assignee_id
+  ORDER BY pg.v DESC NULLS LAST, pg.id DESC
+`);
+```
+
+Design points:
+
+- **Why the CTE**: the expensive parts (`ts_rank` over all matches, the sort) run on `(id, v)`
+  only; full DTO assembly — joins for E16 embeds and `ts_headline` for FR-1.5 snippets — runs on
+  the surviving ≤ `limit + 1` rows. This is what makes `limit ≤ 100` + `ts_headline` CPU stay
+  inside NFR-P.1 (R2).
+- **Snippets (FR-1.5, E16):** `ts_headline('english', coalesce(t.title,'')||' '||coalesce(t.description,''),
+  websearch_to_tsquery('english', ${q}), 'StartSel=⟦,StopSel=⟧,MaxFragments=2')` — custom
+  non-HTML sentinel delimiters, then server-side: HTML-escape the *whole* snippet, and replace
+  `⟦`/`⟧` pairs (escape-safe strings) with `<mark>`/`</mark>`. `ts_headline` does **not** escape
+  user content; the naïve "let it emit `<b>`" leaks stored markup.
+- **hasMore/nextCursor:** slice to `limit`; `hasMore = fetched === limit + 1`; cursor built from
+  the last row's `sortV` (raw value, NULL preserved) + `id`. Replay on last page → `200 []` (FR-4.5).
+- **`q` empty-after-trim** → the `search_vector @@ ...` cond is simply omitted (E4); with no `q`,
+  `relevance` is a 400 (FR-3.2) and default sort is `createdAt desc` (§4.1).
+- Auth order (membership **before** query, NFR-S.3) and rate limit (NFR-S.6) are middleware/route
+  concerns per R6, unchanged by this ADR.
+
+### 5.5 Index & runtime plan (the only migration)
+
+```sql
+CREATE INDEX "tasks_project_created_idx" ON tasks (project_id, created_at DESC, id DESC);
+CREATE INDEX "tasks_project_updated_idx" ON tasks (project_id, updated_at DESC, id DESC);
+-- already present: tasks_search_vector_idx (GIN), tasks_project_id_idx,
+--                  tasks_status_idx, tasks_assignee_id_idx, projects_workspace_id_idx
+```
+
+Plus runtime guardrails, ordered "measure → adopt":
+
+- `statement_timeout = '2s'` scoped to the search path (e.g. `SET LOCAL` in the transaction the
+  service uses, or a dedicated pool setting) — protects the OLTP instance from pathological queries.
+- GIN maintenance: rely on `fastupdate` + autovacuum; monitor index bloat; `REINDEX CONCURRENTLY`
+  as routine ops if posting lists degrade.
+- **If EXPLAIN at 1M shows cross-tenant GIN bitmap scan dominating:** adopt in this order —
+  (1) semi-join resolve `project_id = ANY(...)` from the (cheap) projects lookup;
+  (2) `btree_gin` composite `(project_id, search_vector)`; (3) trigger-denormalized
+  `tasks.workspace_id` + GIN `(workspace_id, search_vector)`. All transactional, same-DB — the
+  denormalization here is *not* the dual-write of B; it's the database keeping its own copies.
+- `priority`/`title`/`dueDate` sorts use per-slice top-N sorts (no index); if p95 shows sort cost
+  on a hot tenant, add a STORED generated `priority_rank smallint` + `(project_id, priority_rank, id DESC)`
+  — deferred as speculative until measured.
+
+### 5.6 Verification gates
+
+Phase 1 §4.5 acceptance suite (all 8, incl. two-workspace cross-contamination test and full
+cursor-walk no-gaps/no-dupes property test) **plus**:
+
+- `EXPLAIN (ANALYZE, BUFFERS)` review against a seeded 100k-task workspace: plan must show
+  scope-first filtering and top-N, no sequential `tasks` scan when `q` present.
+- A load check simulating 100 concurrent searchers (e.g. `autocannon`/`k6`) asserting NFR-P.1
+  before "done".
+
+---
+
+## 6. Consequences
+
+**Positive:** one system of record remains the *only* authority for both content and permission;
+search is transactionally fresh; zero new infra, cost, or vendors; the whole feature ships as
+one query builder + one cursor codec + one index migration; every failure mode is a Postgres
+failure mode the team already has to know.
+
+**Negative / accepted (see §7 triggers for the ones that could turn):**
+
+## 7. Accepted technical debt & risks
+
+| # | Debt / risk | Severity | Mitigation / ladder | Accepted because |
+|---|---|---|---|---|
+| T1 | **Relevance ceiling**: no typo tolerance, no infix/partial-word matching, no synonyms, `ts_rank` ≪ BM25 | Medium | Ladder: `pg_trgm` + `FUSE`/TrigramSimilarity for partial words (v2, same DB) → ParadeDB `pg_search` (BM25 in PG, *if* hosting provider allows the extension) → §7 trigger for B | Phase 1 cut fuzzy to v2 (E3, v2 candidates); filters + sorts carry real disambiguation load in board UX |
+| T2 | **English-only stem config** baked into the generated column; `café` ≠ `cafe` (no `unaccent`) | Low–Med | New migration: `unaccent` template or per-locale configs when multilingual tenants materialize | Current user base is English-first; migration is additive |
+| T3 | **Search competes with OLTP on one instance** (shared CPU/pool) | Medium | `statement_timeout`, §5.5 index ladder, read replica for search-only queries at high QPS | NFR-P.1 target is workspace-bounded; replica is a config change, not a redesign |
+| T4 | **E10 point-in-time relevance**: edited rows may move between pages | Low | Documented in API behavior; stable sorts unaffected; v2 export is an async job, not pages | Any engine has a worse version of this (sync lag) |
+| T5 | **Raw-SQL coupling**: `search_vector` lives outside the Prisma schema; column renames can silently break search | Low | Typed row interfaces + the acceptance suite runs against real DB; CI `verify` gate | The alternative (pure-Prisma) can't express tsquery predicates anyway |
+| T6 | **ts_headline CPU scales with `limit`** | Low | Bounded by `limit ≤ 100` + CTE pattern (§5.4) | R2 decided the cap *for exactly this reason* |
+| T7 | **Legacy unscoped `GET /tasks` remains live** (existing defect, not introduced here) | High — but pre-existing | R6/Phase 1 open follow-up: deprecate/remove in same ship cycle; new endpoint is the documented sanctioned path | Out of this ADR's scope; shipping the scoped endpoint *reduces* exposure |
+| T8 | **`authenticate` is a 501 stub** — hard blocker; this endpoint cannot ship before JWT lands | Blocker | Sequenced dependency, not solved here | Same in every option |
+| T9 | **GIN write amplification** (STORED vector + posting lists on a mutation-heavy table) | Low–Med | Autovacuum/GIN-pending-list monitoring; `REINDEX CONCURRENTLY` runbook | Already the status quo of the shipped migration |
+
+## Revisit triggers (any one reopens this ADR)
+
+1. p95 > 300 ms at ~100k tasks/workspace **after** the §5.5 mitigation ladder has been applied and measured.
+2. A single workspace approaches ~1M tasks, or total corpus approaches ~10M.
+3. Relevance becomes a product surface: user-reported typo/partial-word failures that the §7 T1
+   ladder (trigram → `pg_search`) cannot absorb, or non-English tenants become material.
+4. Search scope grows to comments/attachments/files (cross-entity corpora) or becomes a
+   faceted-analytics surface (heavy `COUNT`-style aggregation).
+5. Any move toward B is mandated: prefer **Meilisearch as a pure recall accelerator in front of
+   Postgres** (engine returns candidate ids; Postgres re-applies workspace scope + filters before
+   rendering — leak severity becomes missing-results, not wrong-tenant-results), not as the
+   authority for ACL. Algolia remains excluded on sovereignty grounds for tenant content.
+
+---
+
+**Summary:** The spec's two hardest requirements — structural workspace scoping and mapped
+priority sort — are *relational* problems that PostgreSQL solves inside the one query that must
+also paginate; the dual-write problem Option B introduces is exactly the class of silent,
+tenant-visible failure D1/D3 forbid; the 1M horizon is met by a measured in-database mitigation
+ladder at $0 marginal infrastructure and one data boundary. Ship Option A; keep §7's triggers
+as the tripwires.
+
+-Thought · 10.9s
+The file has been written. Let me re-verify the main technical claims I made, especially the subtle ones:
+
+1. Row-value comparison with NULLs is three-valued → yes, correct. ROW(NULL,'x') < ROW(1,'a') → NULL. Correct.
+2. uuid has btree ordering → yes.
+3. ts_rank returns float4 → yes, real.
+4. COALESCE ±infinity timestamptz literals → valid.
+5. websearch_to_tsquery never throws exceptions → yes, that's the documented advantage over to_tsquery/plainto_tsquery.
+6. ts_headline does not escape input → correct.
+7. btree_gin composite index on (project_id, search_vector) → valid usage.
+8. GIN's fastupdate → yes.
+9. ORDER BY pg.v DESC NULLS LAST on the outer CTE — pg.v is never NULL (sentinel/coalesce guarantees non-null). No issue.
+
+The chat summary should be concise: decisions, reasoning, key implementation insights, risks, and references to files.
+Done. The ADR is written to docs/course_materials/Chapter 5/Lesson 4/Exercise 2/phase2_architecture_adr.md (ADR-001, alongside your approved Phase 1 analysis). Here's the executive summary:
+Decision: Option A — Integrated PostgreSQL Search
+The four-axis verdict
+Axis	Winner	Reason
+Precision & recall (as specified)	A	The two named requirements are relational, not textual: workspace scope lives in tasks→projects→workspaces (a join Postgres already has) and priority mapping is a query-side CASE. In Option B both become denormalized index attributes — scope enforced by a second system that only knows the ACL copy you feed it, and a priority remapping becomes a full reindex of all tenants instead of a one-line change.
+Operational complexity	A, decisively	The STORED generated column recomputes in the same transaction as the row write — the dual-write problem doesn't exist. B requires app dual-write, outbox+worker, or CDC. Board apps are mutation-heavy (status drags), the worst possible write mix to dual-write. Freshness: A has zero index lag; B has "rename card, card doesn't search" as a defect class.
+Performance 10k→1M	Both pass to horizon; A wins at this scale	NFR is per workspace (100k). Scope-first filtering + keyset pagination keep per-query work proportional to the slice, not the corpus. A's real risk at 1M is a cross-tenant GIN bitmap scan on broad terms — the ADR documents a measure-first ladder: project_id = ANY(...) semi-join → btree_gin composite (project_id, search_vector) → trigger-denormalized workspace_id (same-DB copy, not an external dual-write).
+Cost & sovereignty	A	$0 incremental infra; one purge path (DELETE cascade), one backup, one data boundary. Algolia excluded outright on sovereignty for tenant content; ES/Meili keep sovereignty but at the two-stores tax.
+Key implementation points (the "how")
+- One sort fragment, three uses. sortBy resolves through a server-side allowlist of Prisma.sql fragments spliced identically into SELECT, the keyset WHERE, and ORDER BY — the cursor can't desync from the sort by construction.
+- Priority: CASE ... WHEN 'urgent' THEN 4 ELSE 0 END — ELSE 0 also absorbs E12 (unknown stored values sort deterministically, never 500).
+- Cursor tiebreaker: row-value comparison (sortExpr, t.id) < (cursorV, cursorId). The subtle bug is that < is three-valued under NULL (ROW(NULL,x) < ROW(1,a) → NULL → rows silently vanish), which breaks paging over NULL dueDate (the only nullable sort key). Fix: COALESCE(due_date, ±'infinity'::timestamptz) — since NULLS LAST means NULL behaves as the order-extreme in both directions, the sentinel maps that semantics exactly onto lexicographic row comparison. The sentinel stays SQL-internal; the cursor token carries the raw v: null.
+- page CTE pattern: rank + top-N run on (id, v) only; joins for the E16 embeds and ts_headline snippets run on ≤ limit+1 rows — this is what keeps snippet CPU inside p95. One trap flagged: ts_headline doesn't escape user content, so snippets use custom sentinel delimiters → HTML-escape whole string → swap sentinels for <mark>.
+Accepted debt (highlights)
+- T1 relevance ceiling (no typo/infix matching, ts_rank ≪ BM25) — mitigated by an in-database ladder: pg_trgm/FUSE → ParadeDB pg_search, with Meilisearch as a recall accelerator in front of Postgres (never ACL authority) as the §7 tripwire.
+- English-only stem config baked into the generated column (T2); search competes with OLTP on one instance (T3, statement_timeout + replica path).
+- Pre-existing high-severity items called out honestly: the unscoped legacy GET /tasks (T7) and the 501 auth stub (T8) — this ADR doesn't fix either, but shipping the scoped endpoint reduces the former's exposure.
+Revisit triggers are explicit and measurable (p95 breach after mitigation, single workspace ~1M tasks, relevance becoming a product surface, cross-entity/faceted scope).

@@ -66,10 +66,30 @@ jobs:
     permissions:
       contents: read
       pull-requests: write # upsert the coverage comment on PR runs
+    # Real-DB layer of tests/taskSearch.test.ts (keyset walks, FTS ranking,
+    # workspace isolation) runs against a live Postgres 16 service. Without
+    # TUNDRABOARD_TEST_DB_URL that layer self-skips; CI sets it so a broken
+    # search path fails the pipeline instead of silently passing (review D1).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tundraboard_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       REPO: ${{ github.repository }}
       # scripts/lib/ai-client.mjs reads GITHUB_TOKEN (not GH_TOKEN).
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tundraboard_dev
+      TUNDRABOARD_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/tundraboard_dev
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -79,6 +99,7 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run db:generate
+      - run: npx prisma migrate deploy
       - run: npm run test:coverage
 
       - name: Coverage → job summary
